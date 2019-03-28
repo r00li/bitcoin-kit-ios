@@ -217,6 +217,8 @@
 		D380FD6020FCC04400276993 /* HSBitcoinKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D3FD450520F354EF00F472B9 /* HSBitcoinKit.framework */; };
 		D380FD6820FCC22800276993 /* GeneratedMocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = D380FD6720FCC22800276993 /* GeneratedMocks.swift */; };
 		D3FD450A20F354EF00F472B9 /* HSBitcoinKit.h in Headers */ = {isa = PBXBuildFile; fileRef = D3FD450820F354EF00F472B9 /* HSBitcoinKit.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		F87E8EA32248CC0C00979D83 /* RNSBitcoinKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = F87E8EA22248CC0C00979D83 /* RNSBitcoinKit.swift */; };
+		F87E8EBC2248D5FC00979D83 /* HSHDWalletKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F87E8EBB2248D5FC00979D83 /* HSHDWalletKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -450,6 +452,8 @@
 		D3FD450520F354EF00F472B9 /* HSBitcoinKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = HSBitcoinKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3FD450820F354EF00F472B9 /* HSBitcoinKit.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HSBitcoinKit.h; sourceTree = "<group>"; };
 		D3FD450920F354EF00F472B9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F87E8EA22248CC0C00979D83 /* RNSBitcoinKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RNSBitcoinKit.swift; sourceTree = "<group>"; };
+		F87E8EBB2248D5FC00979D83 /* HSHDWalletKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = HSHDWalletKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -467,6 +471,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				73CCAF11A9BCDCAF9242BC41 /* Pods_HSBitcoinKit.framework in Frameworks */,
+				F87E8EBC2248D5FC00979D83 /* HSHDWalletKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -485,6 +490,7 @@
 		11B35156C3ADDCCD4A60CCD4 /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				F87E8EA22248CC0C00979D83 /* RNSBitcoinKit.swift */,
 				11B35CDB306DF2676A56216B /* BitcoinKit.swift */,
 				11B3525D146F1119A0A9128A /* DataProvider.swift */,
 				11B3529A1731702724B0342D /* Factory.swift */,
@@ -982,6 +988,7 @@
 		D33FD6B220F3782600EC10DB /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				F87E8EBB2248D5FC00979D83 /* HSHDWalletKit.framework */,
 				D33FD6B320F3782600EC10DB /* libcrypto.a */,
 				30C70D5B1A6435BFE9B244ED /* Pods_HSBitcoinKit.framework */,
 				A2C6FEBBDAA35CAE1B816EAC /* Pods_HSBitcoinKitTests.framework */,
@@ -1114,7 +1121,7 @@
 			attributes = {
 				LastSwiftUpdateCheck = 0940;
 				LastUpgradeCheck = 0940;
-				ORGANIZATIONNAME = Grouvi;
+				ORGANIZATIONNAME = Kamino;
 				TargetAttributes = {
 					D380FD5A20FCC04400276993 = {
 						CreatedOnToolsVersion = 9.4.1;
@@ -1169,7 +1176,6 @@
 			inputPaths = (
 				"${SRCROOT}/../Pods/Target Support Files/Pods-HSBitcoinKitTests/Pods-HSBitcoinKitTests-frameworks.sh",
 				"${BUILT_PRODUCTS_DIR}/HSCryptoKit/HSCryptoKit.framework",
-				"${BUILT_PRODUCTS_DIR}/HSHDWalletKit/HSHDWalletKit.framework",
 				"${BUILT_PRODUCTS_DIR}/RxAtomic/RxAtomic.framework",
 				"${BUILT_PRODUCTS_DIR}/RxSwift/RxSwift.framework",
 				"${BUILT_PRODUCTS_DIR}/Cuckoo/Cuckoo.framework",
@@ -1188,7 +1194,6 @@
 			name = "[CP] Embed Pods Frameworks";
 			outputPaths = (
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/HSCryptoKit.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/HSHDWalletKit.framework",
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/RxAtomic.framework",
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/RxSwift.framework",
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Cuckoo.framework",
@@ -1452,6 +1457,7 @@
 				2FA5D166F7AD6D1E7A81CB4D /* Blockchain.swift in Sources */,
 				11B3534C9529906826754D6E /* Protocols.swift in Sources */,
 				11B35468A2ACF4B8534BB719 /* DataProvider.swift in Sources */,
+				F87E8EA32248CC0C00979D83 /* RNSBitcoinKit.swift in Sources */,
 				11B358B84B9C6B09ADB8A0B0 /* HDWallet.swift in Sources */,
 				58AAA2C85BFE1C624D1A1997 /* SigHashType.swift in Sources */,
 				58AAA7912B48C0C21F50DBF2 /* BitcoinAddressSelector.swift in Sources */,
