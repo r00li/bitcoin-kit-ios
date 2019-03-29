@@ -1,4 +1,5 @@
 import Foundation
+import HSCryptoKit
 
 public class HDWallet {
     private var publicKey: Data?
@@ -8,7 +9,9 @@ public class HDWallet {
     private var purpose: UInt32
     private var coinType: UInt32
     public var gapLimit: Int
+    
     private(set) var isColdWallet: Bool = false
+    private(set) var coldWalletXpub: HDPublicKey?
 
     public init(seed: Data, coinType: UInt32, xPrivKey: UInt32, xPubKey: UInt32, gapLimit: Int = 5) {
         self.seed = seed
@@ -19,13 +22,37 @@ public class HDWallet {
         self.coinType = coinType
     }
     
-    public init(publicKey: Data, gapLimit: Int = 5) {
+    public init(xpub: String, gapLimit: Int = 5) {
         self.gapLimit = gapLimit
         self.isColdWallet = true
         
         // When initializing a cold wallet this data is read from public key, so these values here don't matter.
         self.purpose = 44
         self.coinType = 0
+        
+        let decodedBase58 = HSCryptoKit.Base58.decode(xpub)
+        
+        if decodedBase58.count >= 81 {
+            // xpub should be 81 bytes long
+            
+            let versionBytes = Data(decodedBase58[0...3])
+            let depth = decodedBase58[4]
+            let parentKeyFingerprint = Data(decodedBase58[5...8])
+            let childNumber = Data(decodedBase58[9...12])
+            let chainCode = Data(decodedBase58[13...44])
+            let pubKey = Data(decodedBase58[45...77])
+            
+            var versionBytesUint32: UInt32 = 0
+            (versionBytes as NSData).getBytes(&versionBytesUint32, length: MemoryLayout<UInt32>.size)
+            
+            var parentKeyFingerprintUint32: UInt32 = 0
+            (parentKeyFingerprint as NSData).getBytes(&parentKeyFingerprintUint32, length: MemoryLayout<UInt32>.size)
+            
+            var childNumberUint32: UInt32 = 0
+            (childNumber as NSData).getBytes(&childNumberUint32, length: MemoryLayout<UInt32>.size)
+            
+            self.coldWalletXpub = HDPublicKey(raw: pubKey, chainCode: chainCode, xPubKey: versionBytesUint32, depth: depth, fingerprint: parentKeyFingerprintUint32, childIndex: childNumberUint32)
+        }
     }
 
     public func privateKey(account: Int, index: Int, chain: Chain) throws -> HDPrivateKey {
@@ -42,49 +69,20 @@ public class HDWallet {
     }
     
     public func publicKey(account: Int, index: Int, chain: Chain) throws -> HDPublicKey {
-        return try HDPublicKey(
-                            raw: Data(bytes: [0x03, 0x59, 0x5d, 0x88, 0x0c, 0xfe, 0xb1, 0x11, 0xc4, 0xd8, 0x46, 0x83, 0xc7, 0xd7, 0x2e, 0x69, 0x2a, 0x6f, 0x58, 0x3c, 0xcf, 0x24, 0xc4, 0x11, 0x96, 0x40, 0x77, 0x47, 0x27, 0x20, 0x12, 0xa8, 0xd7]),
-                           chainCode: Data(bytes: [0x22, 0x41, 0x9c, 0x4e, 0xf5, 0x63, 0x42, 0x02, 0x92, 0x16, 0x51, 0xe2, 0x59, 0xc4, 0xab, 0xf8, 0x93, 0x0e, 0x32, 0x0e, 0x6d, 0x3d, 0xa7, 0xf5, 0x29, 0x98, 0xca, 0x09, 0x25, 0xdd, 0x4e, 0x2b]),
-                           xPubKey: 0x043587cf,
-                           depth: 0x03,
-                           fingerprint: 0xcdfed67d,
-                           childIndex: 0x80000000).derived(at: UInt32(account)).derived(at: UInt32(index))
+        if isColdWallet {
+            if let xpub = coldWalletXpub {
+                return try xpub.derived(at: UInt32(account)).derived(at: UInt32(index))
+            } else {
+                throw NSError(domain: "RNS HD Wallet", code: 1, userInfo: nil)
+            }
+        } else {
+            return try privateKey(account: account, index: index, chain: chain).publicKey()
+        }
     }
 
     public enum Chain : Int {
         case external
         case `internal`
     }
-    
-    /*func derivedKey(path: String) throws -> HDPublicKey {
-        var key = HDPublicKey(
-            raw: Data(bytes: [0x03, 0x59, 0x5d, 0x88, 0x0c, 0xfe, 0xb1, 0x11, 0xc4, 0xd8, 0x46, 0x83, 0xc7, 0xd7, 0x2e, 0x69, 0x2a, 0x6f, 0x58, 0x3c, 0xcf, 0x24, 0xc4, 0x11, 0x96, 0x40, 0x77, 0x47, 0x27, 0x20, 0x12, 0xa8, 0xd7]),
-            chainCode: Data(bytes: [0x22, 0x41, 0x9c, 0x4e, 0xf5, 0x63, 0x42, 0x02, 0x92, 0x16, 0x51, 0xe2, 0x59, 0xc4, 0xab, 0xf8, 0x93, 0x0e, 0x32, 0x0e, 0x6d, 0x3d, 0xa7, 0xf5, 0x29, 0x98, 0xca, 0x09, 0x25, 0xdd, 0x4e, 0x2b]),
-            xPubKey: 0x043587cf,
-            depth: 0x03,
-            fingerprint: 0xcdfed67d,
-            childIndex: 0x80000000)
-        
-        var path = path
-        if path == "m" || path == "/" || path == "" {
-            return key
-        }
-        if path.contains("m/") {
-            path = String(path.dropFirst(2))
-        }
-        for chunk in path.split(separator: "/") {
-            var hardened = false
-            var indexText = chunk
-            if chunk.contains("'") {
-                hardened = true
-                indexText = indexText.dropLast()
-            }
-            guard let index = UInt32(indexText) else {
-                fatalError("invalid path")
-            }
-            key = try key.derived(at: index)
-        }
-        return key
-    }*/
 
 }

@@ -109,7 +109,7 @@ public class BitcoinKit {
         addressConverter = AddressConverter(network: network, bech32AddressConverter: bech32AddressConverter)
         logger = Logger(network: network, minLogLevel: minLogLevel)
         
-        hdWallet = HDWallet(publicKey: Data(), gapLimit: 20)
+        hdWallet = HDWallet(xpub: "tpubDDYDWoUhYtXEFLqrfdL4UeKCBPLMDZBb2Svfi7UeCvEt4pWHiBD2AkvVYCUBsk4uHo9yYMJc1uQjtjaLPTx8RBKuZv844rmnZ9CsAb41fJ4", gapLimit: 20)
         
         stateManager = StateManager(storage: storage, network: network, newWallet: newWallet)
         
