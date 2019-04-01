@@ -43,7 +43,7 @@ class Manager {
     }
 
     private func initWalletKit(words: [String]) {
-        bitcoinKit = BitcoinKit(withPublicKey: "", coin: self.coin, walletId: "SomeId")
+        bitcoinKit = BitcoinKit(withPublicKey: "tpubDDYDWoUhYtXEFLqrfdL4UeKCBPLMDZBb2Svfi7UeCvEt4pWHiBD2AkvVYCUBsk4uHo9yYMJc1uQjtjaLPTx8RBKuZv844rmnZ9CsAb41fJ4", coin: self.coin, walletId: "SomeId")
         //bitcoinKit = BitcoinKit(withWords: words, coin: self.coin, walletId: "SomeId", confirmationsThreshold: 1)
         bitcoinKit.delegate = self
 

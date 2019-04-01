@@ -10,17 +10,11 @@ public class HDWallet {
     private var coinType: UInt32
     public var gapLimit: Int
     
+    // MARK: - Kamino special additions
+    // --------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    
     private(set) var isColdWallet: Bool = false
     private(set) var coldWalletXpub: HDPublicKey?
-
-    public init(seed: Data, coinType: UInt32, xPrivKey: UInt32, xPubKey: UInt32, gapLimit: Int = 5) {
-        self.seed = seed
-        self.gapLimit = gapLimit
-
-        keychain = HDKeychain(seed: seed, xPrivKey: xPrivKey, xPubKey: xPubKey)
-        purpose = 44
-        self.coinType = coinType
-    }
     
     public init(xpub: String, gapLimit: Int = 5) {
         self.gapLimit = gapLimit
@@ -54,6 +48,18 @@ public class HDWallet {
             self.coldWalletXpub = HDPublicKey(raw: pubKey, chainCode: chainCode, xPubKey: versionBytesUint32, depth: depth, fingerprint: parentKeyFingerprintUint32, childIndex: childNumberUint32)
         }
     }
+
+    public init(seed: Data, coinType: UInt32, xPrivKey: UInt32, xPubKey: UInt32, gapLimit: Int = 5) {
+        self.seed = seed
+        self.gapLimit = gapLimit
+
+        keychain = HDKeychain(seed: seed, xPrivKey: xPrivKey, xPubKey: xPubKey)
+        purpose = 44
+        self.coinType = coinType
+    }
+    
+    // MARK: - End kamino additions
+    // --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     public func privateKey(account: Int, index: Int, chain: Chain) throws -> HDPrivateKey {
         return try privateKey(path: "m/\(purpose)'/\(coinType)'/\(account)'/\(chain.rawValue)/\(index)")

@@ -361,6 +361,10 @@ protocol ITransactionCreator {
 protocol ITransactionBuilder {
     func fee(for value: Int, feeRate: Int, senderPay: Bool, address: String?) throws -> Int
     func buildTransaction(value: Int, feeRate: Int, senderPay: Bool, toAddress: String) throws -> FullTransaction
+    
+    // MARK - Kamino additions
+    func buildColdTransaction(value: Int, feeRate: Int, senderPay: Bool, toAddress: String) throws -> TransactionBuilder.NonSignedTransaction
+    func completeProcessingColdTransaction(transaction: FullTransaction) throws -> FullTransaction
 }
 
 protocol IBlockchain {

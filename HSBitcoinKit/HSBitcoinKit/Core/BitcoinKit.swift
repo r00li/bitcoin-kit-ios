@@ -68,6 +68,10 @@ public class BitcoinKit {
     private let kitStateProvider: IKitStateProvider & ISyncStateListener
     private var dataProvider: IDataProvider & IBlockchainDataListener
     
+    
+    // MARK: - Kamino special functions
+    // --------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    
     public init(withPublicKey: String, coin: Coin, walletId: String, newWallet: Bool = false, confirmationsThreshold: Int = 6, minLogLevel: Logger.Level = .verbose) {
         let databaseFileName = "\(walletId)-\(coin.rawValue)"
         
@@ -109,7 +113,7 @@ public class BitcoinKit {
         addressConverter = AddressConverter(network: network, bech32AddressConverter: bech32AddressConverter)
         logger = Logger(network: network, minLogLevel: minLogLevel)
         
-        hdWallet = HDWallet(xpub: "tpubDDYDWoUhYtXEFLqrfdL4UeKCBPLMDZBb2Svfi7UeCvEt4pWHiBD2AkvVYCUBsk4uHo9yYMJc1uQjtjaLPTx8RBKuZv844rmnZ9CsAb41fJ4", gapLimit: 20)
+        hdWallet = HDWallet(xpub: withPublicKey, gapLimit: 20)
         
         stateManager = StateManager(storage: storage, network: network, newWallet: newWallet)
         
@@ -184,7 +188,29 @@ public class BitcoinKit {
         dataProvider.delegate = self
     }
     
-    public init(withWords words: [String], coin: Coin, walletId: String, newWallet: Bool = false, confirmationsThreshold: Int = 6, minLogLevel: Logger.Level = .verbose) {
+    public typealias TransactionToSign = (Int, Int, [Data], String)
+    
+    public func createColdWalletTransaction(to address: String, value: Int, fee: Int) throws -> TransactionToSign {
+        // Modified send function that normally calls many methods. This removes the unecessary middle steps
+
+        try peerGroup.checkPeersSynced()
+
+        let transactionFee = storage.feeRate ?? FeeRate.defaultFeeRate
+        //let transaction = try transactionBuilder.buildTransaction(value: value, feeRate: transactionFee.medium, senderPay: true, toAddress: address)
+        let transaction = try transactionBuilder.buildColdTransaction(value: value, feeRate: transactionFee.medium, senderPay: true, toAddress: address)
+        print(transaction)
+        //return transaction
+        //try transactionProcessor.processCreated(transaction: transaction)
+        //try peerGroup.sendPendingTransactions()
+        
+        return (transaction.outputs.count, transaction.inputs.count, transaction.inputs.compactMap( { $0.signatureData } ), (network as? BitcoinTestNet) != nil ? "Testnet" : "Bitcoin")
+    }
+    
+    public func sendColdWalletTransaction() {
+        
+    }
+    
+    public init(withSeed seed: Data, coin: Coin, walletId: String, newWallet: Bool = false, confirmationsThreshold: Int = 6, minLogLevel: Logger.Level = .verbose) {
         let databaseFileName = "\(walletId)-\(coin.rawValue)"
         
         storage = GrdbStorage(databaseFileName: databaseFileName)
@@ -225,7 +251,7 @@ public class BitcoinKit {
         addressConverter = AddressConverter(network: network, bech32AddressConverter: bech32AddressConverter)
         logger = Logger(network: network, minLogLevel: minLogLevel)
         
-        hdWallet = HDWallet(seed: Mnemonic.seed(mnemonic: words), coinType: network.coinType, xPrivKey: network.xPrivKey, xPubKey: network.xPubKey, gapLimit: 20)
+        hdWallet = HDWallet(seed: seed, coinType: network.coinType, xPrivKey: network.xPrivKey, xPubKey: network.xPubKey, gapLimit: 20)
         
         stateManager = StateManager(storage: storage, network: network, newWallet: newWallet)
         
@@ -299,6 +325,13 @@ public class BitcoinKit {
         
         dataProvider.delegate = self
     }
+    
+    public convenience init(withWords words: [String], coin: Coin, walletId: String, newWallet: Bool = false, confirmationsThreshold: Int = 6, minLogLevel: Logger.Level = .verbose) {
+        self.init(withSeed: Mnemonic.seed(mnemonic: words), coin: coin, walletId: walletId, newWallet: newWallet, confirmationsThreshold: confirmationsThreshold, minLogLevel: minLogLevel)
+    }
+    
+    // MARK: - End Kamino special functions
+    // --------------------------------------------------------------------------------------------------------------------------------------------------------------------
     
 }
 

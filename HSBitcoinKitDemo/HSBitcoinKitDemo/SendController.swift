@@ -48,7 +48,8 @@ class SendController: UIViewController {
         }
 
         do {
-            try Manager.shared.bitcoinKit.send(to: address, value: Int(amount * 100000000))
+            //try Manager.shared.bitcoinKit.send(to: address, value: Int(amount * 100000000))
+            try Manager.shared.bitcoinKit.createColdWalletTransaction(to: address, value: Int(amount * 100000000), fee: 0)
 
             addressTextField?.text = ""
             amountTextField?.text = ""

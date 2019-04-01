@@ -117,5 +117,129 @@ extension TransactionBuilder: ITransactionBuilder {
 
         return FullTransaction(header: transaction, inputs: inputsToSign.map{ $0.input }, outputs: outputs)
     }
+    
+    
+    // MARK: - Kamino additions
+    // --------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    
+    public typealias NonSignedInput = (serialzedTransaction: Data, signatureData: Data)
+    public typealias NonSignedTransaction = (transaction: Transaction, inputs: [NonSignedInput], outputs: [Output])
+    
+    func buildColdTransaction(value: Int, feeRate: Int, senderPay: Bool, toAddress: String) throws -> NonSignedTransaction {
+        guard let changePubKey = try? addressManager.changePublicKey() else {
+            throw BuildError.noChangeAddress
+        }
+        
+        guard let network = (self.inputSigner as? InputSigner)?.network else {
+            throw NSError(domain: "RNS HD Wallet", code: 100, userInfo: nil)
+        }
+        
+        let changeScriptType = ScriptType.p2pkh
+        let address = try addressConverter.convert(address: toAddress)
+        let selectedOutputsInfo = try unspentOutputSelector.select(value: value, feeRate: feeRate, outputScriptType: address.scriptType, changeType: changeScriptType, senderPay: senderPay, unspentOutputs: unspentOutputProvider.allUnspentOutputs)
+        
+        if !senderPay {
+            guard selectedOutputsInfo.fee < value else {
+                throw BuildError.feeMoreThanValue
+            }
+        }
+        
+        var inputsToSign = [InputToSign]()
+        var outputs = [Output]()
+        
+        // Add inputs without unlocking scripts
+        for output in selectedOutputsInfo.unspentOutputs {
+            inputsToSign.append(try input(fromUnspentOutput: output))
+        }
+        
+        // Calculate fee
+        let receivedValue = senderPay ? value : value - selectedOutputsInfo.fee
+        let sentValue = senderPay ? value + selectedOutputsInfo.fee : value
+        
+        // Add :to output
+        outputs.append(try output(withIndex: 0, address: address, value: receivedValue))
+        
+        // Add :change output if needed
+        if selectedOutputsInfo.addChangeOutput {
+            let changeAddress = try addressConverter.convert(keyHash: changePubKey.keyHash, type: changeScriptType)
+            outputs.append(try output(withIndex: 1, address: changeAddress, value: selectedOutputsInfo.totalValue - sentValue))
+        }
+        
+        // Build transaction
+        let transaction = factory.transaction(version: 1, lockTime: 0)
+
+        // Prepare signature data
+        var preparedInputs: [NonSignedInput] = []
+        for i in 0..<inputsToSign.count {
+            let sigScriptData = try? prepareForSignature(transaction: transaction, inputsToSign: inputsToSign, outputs: outputs, index: i, network: network)
+            
+            guard let input = sigScriptData else {
+                throw NSError(domain: "RNS HD Wallet", code: 101, userInfo: nil)
+            }
+            
+            preparedInputs.append(input)
+        }
+        
+        
+
+        // Sign inputs
+//        for i in 0..<inputsToSign.count {
+//            let previousUnspentOutput = selectedOutputsInfo.unspentOutputs[i]
+//
+//            let sigScriptData = try inputSigner.sigScriptData(transaction: transaction, inputsToSign: inputsToSign, outputs: outputs, index: i)
+//            switch previousUnspentOutput.output.scriptType {
+//            case .p2wpkh:
+//                transaction.segWit = true
+//                inputsToSign[i].input.witnessData.append(contentsOf: sigScriptData)
+//            case .p2wpkhSh:
+//                transaction.segWit = true
+//                let witnessProgram = OpCode.scriptWPKH(previousUnspentOutput.publicKey.keyHash)
+//                inputsToSign[i].input.signatureScript = scriptBuilder.unlockingScript(params: [witnessProgram])
+//                inputsToSign[i].input.witnessData.append(contentsOf: sigScriptData)
+//            default: inputsToSign[i].input.signatureScript = scriptBuilder.unlockingScript(params: sigScriptData)
+//            }
+//        }
+        
+        transaction.status = .new
+        transaction.isMine = true
+        transaction.isOutgoing = true
+        
+        return (transaction, preparedInputs, outputs)
+        
+        //return FullTransaction(header: transaction, inputs: inputsToSign.map{ $0.input }, outputs: outputs)
+    }
+    
+    func completeProcessingColdTransaction(transaction: FullTransaction) throws -> FullTransaction {
+        return transaction
+    }
+    
+    private func prepareForSignature(transaction: Transaction, inputsToSign: [InputToSign], outputs: [Output], index: Int, network: INetwork) throws -> NonSignedInput {
+        let input = inputsToSign[index]
+        let previousOutput = input.previousOutput
+        let pubKey = input.previousOutputPublicKey
+        let publicKey = pubKey.raw
+        
+        //guard let privateKeyData = try? hdWallet.privateKeyData(account: pubKey.account, index: pubKey.index, external: pubKey.external) else {
+        //    throw SignError.noPrivateKey
+        //}
+        let witness = previousOutput.scriptType == .p2wpkh || previousOutput.scriptType == .p2wpkhSh
+        
+        var serializedTransaction = try TransactionSerializer.serializedForSignature(transaction: transaction, inputsToSign: inputsToSign, outputs: outputs, inputIndex: index, forked: witness || network.sigHash.forked)
+        serializedTransaction += UInt32(network.sigHash.value)
+        let signatureHash = CryptoKit.sha256sha256(serializedTransaction)
+        
+        //let signature = try CryptoKit.sign(data: signatureHash, privateKey: privateKeyData) + Data(bytes: [network.sigHash.value])
+        
+        //switch previousOutput.scriptType {
+        //case .p2pk: return [signature]
+        //default: return [signature, publicKey]
+        //}
+        
+        return (serializedTransaction, signatureHash)
+    }
+
+    
+    // MARK: - End Kamino additions
+    // --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 }
