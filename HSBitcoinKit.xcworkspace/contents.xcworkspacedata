@@ -8,9 +8,6 @@
       location = "group:HSBitcoinKitDemo/HSBitcoinKitDemo.xcodeproj">
    </FileRef>
    <FileRef
-      location = "group:HSHDWalletKit/HSHDWalletKit.xcodeproj">
-   </FileRef>
-   <FileRef
       location = "group:Pods/Pods.xcodeproj">
    </FileRef>
 </Workspace>

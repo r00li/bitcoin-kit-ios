@@ -6,13 +6,12 @@ inhibit_all_warnings!
 workspace 'HSBitcoinKit'
 
 project 'HSBitcoinKitDemo/HSBitcoinKitDemo'
-project 'HSHDWalletKit/HSHDWalletKit'
 project 'HSBitcoinKit/HSBitcoinKit'
 
 
 def internal_pods
   pod 'HSCryptoKit', '~> 1.3.0'
-  #pod 'HSHDWalletKit', '~> 1.0.4'
+  pod 'HSHDWalletKit', :git => 'https://github.com/r00li/hd-wallet-kit-ios.git', :branch => 'master'
 end
 
 def kit_pods
@@ -36,11 +35,6 @@ end
 target :HSBitcoinKit do
   project 'HSBitcoinKit/HSBitcoinKit'
   kit_pods
-end
-
-target :HSHDWalletKit do
-    project 'HSHDWalletKit/HSHDWalletKit'
-    kit_pods
 end
 
 target :HSBitcoinKitTests do
