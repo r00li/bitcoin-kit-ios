@@ -93,7 +93,7 @@ class BitcoinCoreBuilder {
            seed = selfSeed
         } else if let words = self.words {
             seed = Mnemonic.seed(mnemonic: words)
-        } else if let xpub = self.xpub {
+        } else if let _ = self.xpub {
             seed = nil
         } else {
             throw BuildError.noSeedData
