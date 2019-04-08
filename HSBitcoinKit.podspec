@@ -26,4 +26,5 @@ Pod::Spec.new do |spec|
   spec.dependency 'GRDB.swift', '~> 3.6.2'
   spec.dependency 'RealmSwift', '~> 3.11.0'
   spec.dependency 'RxRealm', '~> 0.7.0'
+  spec.dependency 'HSCryptoX11', git: 'https://github.com/horizontalsystems/crypto-x11-ios'
 end
