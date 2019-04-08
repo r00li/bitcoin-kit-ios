@@ -24,6 +24,7 @@ DEPENDENCIES:
   - BigInt (~> 3.1.0)
   - Cuckoo
   - GRDB.swift (~> 3.6.2)
+  - HSCryptoKit (~> 1.3.0)
   - HSCryptoX11 (from `https://github.com/horizontalsystems/crypto-x11-ios`)
   - HSHDWalletKit (from `https://github.com/r00li/hd-wallet-kit-ios.git`, branch `master`)
   - Nimble
@@ -78,6 +79,6 @@ SPEC CHECKSUMS:
   RxSwift: 74c29b693c8e42b0f64400e8b06564575742d649
   SipHash: fad90a4683e420c52ef28063063dbbce248ea6d4
 
-PODFILE CHECKSUM: 4b9fc95ca92a61e5383a26eb556f2845f74bfcba
+PODFILE CHECKSUM: 1f1af6a968bcb1c97c05b8277ac3ab4fe52499b7
 
 COCOAPODS: 1.5.3
