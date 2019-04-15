@@ -125,7 +125,7 @@ extension BitcoinCore {
     // KAMINO MOD:
     //--------------------------------------------------------------------------------------------------------------------------------------------------------
     
-    public typealias TransactionToSign = (Int, Int, [Data])
+    public typealias TransactionToSign = (outputCount: Int, inputCount: Int, inputs: [Data])
     
     public func createColdWalletTransaction(to address: String, value: Int, feePriority: FeePriority = .medium) throws -> TransactionToSign {
         // Modified send function that normally calls many methods. This removes the unecessary middle steps

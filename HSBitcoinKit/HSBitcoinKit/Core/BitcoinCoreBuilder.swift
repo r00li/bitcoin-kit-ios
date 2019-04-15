@@ -119,7 +119,7 @@ class BitcoinCoreBuilder {
         // END KAMINO MOD:
         //--------------------------------------------------------------------------------------------------------------------------------------------------------
 
-        let logger = Logger(network: network, minLogLevel: .verbose)
+        let logger = Logger(network: network, minLogLevel: .warning)
 
         let apiFeeRate = IpfsApi(resource: feeRateApiResource, apiProvider: FeeRateApiProvider(), logger: logger)
         let feeRateSyncer = FeeRateSyncer(api: apiFeeRate, storage: storage)
