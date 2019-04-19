@@ -561,12 +561,15 @@ extension GrdbStorage: IStorage {
                       SELECT transactions.*, blocks.height as blockHeight
                       FROM transactions
                       LEFT JOIN blocks ON transactions.blockHashReversedHex = blocks.headerHashReversedHex
-                      ORDER BY transactions.timestamp DESC, transactions."order" DESC
                       """
-
+            
             if let fromTimestamp = fromTimestamp, let fromOrder = fromOrder {
-                sql = sql + "WHERE transactions.timestamp < \(fromTimestamp) OR (transactions.timestamp == \(fromTimestamp) AND transactions.\"order\" < \(fromOrder))"
+                sql = sql + " " + "WHERE transactions.timestamp < \(fromTimestamp) OR (transactions.timestamp = \(fromTimestamp) AND transactions.\"order\" < \(fromOrder))"
             }
+            
+            sql = sql + " " + """
+            ORDER BY transactions.timestamp DESC, transactions."order" DESC
+            """
 
             let rows = try Row.fetchCursor(db, sql, adapter: adapter)
 
