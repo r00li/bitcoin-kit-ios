@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-enum ScriptType: Int, DatabaseValueConvertible {
+public enum ScriptType: Int, DatabaseValueConvertible {
     case unknown, p2pkh, p2pk, p2multi, p2sh, p2wsh, p2wpkh, p2wpkhSh
 
     var size: Int {
@@ -41,16 +41,16 @@ enum ScriptType: Int, DatabaseValueConvertible {
 
 }
 
-class Output: Record {
+public class Output: Record {
 
-    var value: Int
-    var lockingScript: Data
-    var index: Int
-    var transactionHashReversedHex: String = ""
-    var publicKeyPath: String? = nil
-    var scriptType: ScriptType = .unknown
-    var keyHash: Data? = nil
-    var address: String? = nil
+    public var value: Int
+    public var lockingScript: Data
+    public var index: Int
+    public var transactionHashReversedHex: String = ""
+    public var publicKeyPath: String? = nil
+    public var scriptType: ScriptType = .unknown
+    public var keyHash: Data? = nil
+    public var address: String? = nil
 
     init(withValue value: Int, index: Int, lockingScript script: Data, type: ScriptType = .unknown, address: String? = nil, keyHash: Data? = nil, publicKey: PublicKey? = nil) {
         self.value = value
@@ -64,7 +64,7 @@ class Output: Record {
         super.init()
     }
 
-    override class var databaseTableName: String {
+    override open class var databaseTableName: String {
         return "outputs"
     }
 
@@ -92,7 +92,7 @@ class Output: Record {
         super.init(row: row)
     }
 
-    override func encode(to container: inout PersistenceContainer) {
+    override open func encode(to container: inout PersistenceContainer) {
         container[Columns.value] = value
         container[Columns.lockingScript] = lockingScript
         container[Columns.index] = index

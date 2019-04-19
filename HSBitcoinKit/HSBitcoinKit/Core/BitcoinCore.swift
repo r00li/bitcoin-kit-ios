@@ -136,9 +136,33 @@ extension BitcoinCore {
     // KAMINO MOD:
     //--------------------------------------------------------------------------------------------------------------------------------------------------------
     
-    public typealias TransactionToSign = (outputCount: Int, inputCount: Int, inputs: [Data])
+    public typealias NonSignedTransaction = (transaction: FullTransaction, inputHashes: [Data], inputPublicKeys: [PublicKey])
     
-    public func createColdWalletTransaction(to address: String, value: Int, feePriority: FeePriority = .medium) throws -> TransactionToSign {
+    public func transaction(fromHash: String?) -> FullTransaction? {
+        guard let fromHash = fromHash else {
+            return nil
+        }
+        
+        var fromTimestamp: Int? = nil
+        var fromOrder: Int? = nil
+        
+        if let fromTransaction = self.storage.transaction(byHashHex: fromHash) {
+            fromTimestamp = fromTransaction.timestamp
+            fromOrder = fromTransaction.order
+        }
+        
+        let transactions = self.storage.fullTransactionsInfo(fromTimestamp: fromTimestamp, fromOrder: fromOrder, limit: 1)
+        if let transaction = transactions.first {
+            let inputs = transaction.inputsWithPreviousOutputs.compactMap( { $0.input } )
+            let outputs = transaction.outputs
+            
+            return FullTransaction(header: transaction.transactionWithBlock.transaction, inputs: inputs, outputs: outputs)
+        }
+        
+        return nil
+    }
+    
+    public func createColdWalletTransaction(to address: String, value: Int, feePriority: FeePriority = .medium) throws -> NonSignedTransaction {
         // Modified send function that normally calls many methods. This removes the unecessary middle steps
         
         try peerGroup.checkPeersSynced()
@@ -150,7 +174,7 @@ extension BitcoinCore {
         //try transactionProcessor.processCreated(transaction: transaction)
         //try peerGroup.sendPendingTransactions()
         
-        return (transaction.outputs.count, transaction.inputs.count, transaction.inputs.compactMap( { $0.signatureData } ))
+        return transaction
     }
     
     // END KAMINO MOD:

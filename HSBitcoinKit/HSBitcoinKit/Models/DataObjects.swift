@@ -12,11 +12,11 @@ struct BlockHeader {
 
 }
 
-struct FullTransaction {
+public struct FullTransaction {
 
-    let header: Transaction
-    let inputs: [Input]
-    let outputs: [Output]
+    public let header: Transaction
+    public let inputs: [Input]
+    public let outputs: [Output]
 
     init(header: Transaction, inputs: [Input], outputs: [Output]) {
         self.header = header

@@ -2,21 +2,21 @@ import Foundation
 import HSCryptoKit
 import GRDB
 
-class PublicKey: Record {
+public class PublicKey: Record {
 
-    enum InitError: Error {
+    public enum InitError: Error {
         case invalid
         case wrongNetwork
     }
 
-    let path: String
-    let account: Int
-    let index: Int
-    let external: Bool
-    let raw: Data
-    let keyHash: Data
-    let scriptHashForP2WPKH: Data
-    let keyHashHex: String
+    public let path: String
+    public let account: Int
+    public let index: Int
+    public let external: Bool
+    public let raw: Data
+    public let keyHash: Data
+    public let scriptHashForP2WPKH: Data
+    public let keyHashHex: String
 
     init(withAccount account: Int, index: Int, external: Bool, hdPublicKeyData data: Data) {
         self.account = account
@@ -32,7 +32,7 @@ class PublicKey: Record {
         super.init()
     }
 
-    override class var databaseTableName: String {
+    override open class var databaseTableName: String {
         return "publicKeys"
     }
 
@@ -60,7 +60,7 @@ class PublicKey: Record {
         super.init(row: row)
     }
 
-    override func encode(to container: inout PersistenceContainer) {
+    override open func encode(to container: inout PersistenceContainer) {
         container[Columns.path] = path
         container[Columns.account] = account
         container[Columns.index] = index

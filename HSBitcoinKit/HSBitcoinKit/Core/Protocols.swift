@@ -361,7 +361,7 @@ protocol ITransactionBuilder {
     func buildTransaction(value: Int, feeRate: Int, senderPay: Bool, toAddress: String) throws -> FullTransaction
     
     // MARK - Kamino additions
-    func buildColdTransaction(value: Int, feeRate: Int, senderPay: Bool, toAddress: String) throws -> TransactionBuilder.NonSignedTransaction
+    func buildColdTransaction(value: Int, feeRate: Int, senderPay: Bool, toAddress: String) throws -> BitcoinCore.NonSignedTransaction
     func completeProcessingColdTransaction(transaction: FullTransaction) throws -> FullTransaction
 }
 

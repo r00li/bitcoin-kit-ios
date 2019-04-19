@@ -122,10 +122,7 @@ extension TransactionBuilder: ITransactionBuilder {
     // MARK: - Kamino additions
     // --------------------------------------------------------------------------------------------------------------------------------------------------------------------
     
-    public typealias NonSignedInput = (serialzedTransaction: Data, signatureData: Data)
-    public typealias NonSignedTransaction = (transaction: Transaction, inputs: [NonSignedInput], outputs: [Output])
-    
-    func buildColdTransaction(value: Int, feeRate: Int, senderPay: Bool, toAddress: String) throws -> NonSignedTransaction {
+    func buildColdTransaction(value: Int, feeRate: Int, senderPay: Bool, toAddress: String) throws -> BitcoinCore.NonSignedTransaction {
         guard let changePubKey = try? addressManager.changePublicKey() else {
             throw BuildError.noChangeAddress
         }
@@ -167,53 +164,52 @@ extension TransactionBuilder: ITransactionBuilder {
         
         // Build transaction
         let transaction = factory.transaction(version: 1, lockTime: 0)
-
+        
         // Prepare signature data
-        var preparedInputs: [NonSignedInput] = []
+        var preparedInputs: [Data] = []
+        var publicKeys: [PublicKey] = []
         for i in 0..<inputsToSign.count {
             let sigScriptData = try? prepareForSignature(transaction: transaction, inputsToSign: inputsToSign, outputs: outputs, index: i, network: network)
-            
             guard let input = sigScriptData else {
                 throw NSError(domain: "RNS HD Wallet", code: 101, userInfo: nil)
             }
             
             preparedInputs.append(input)
+            publicKeys.append(inputsToSign[i].previousOutputPublicKey)
         }
         
         
-
         // Sign inputs
-//        for i in 0..<inputsToSign.count {
-//            let previousUnspentOutput = selectedOutputsInfo.unspentOutputs[i]
-//
-//            let sigScriptData = try inputSigner.sigScriptData(transaction: transaction, inputsToSign: inputsToSign, outputs: outputs, index: i)
-//            switch previousUnspentOutput.output.scriptType {
-//            case .p2wpkh:
-//                transaction.segWit = true
-//                inputsToSign[i].input.witnessData.append(contentsOf: sigScriptData)
-//            case .p2wpkhSh:
-//                transaction.segWit = true
-//                let witnessProgram = OpCode.scriptWPKH(previousUnspentOutput.publicKey.keyHash)
-//                inputsToSign[i].input.signatureScript = scriptBuilder.unlockingScript(params: [witnessProgram])
-//                inputsToSign[i].input.witnessData.append(contentsOf: sigScriptData)
-//            default: inputsToSign[i].input.signatureScript = scriptBuilder.unlockingScript(params: sigScriptData)
-//            }
-//        }
+        //        for i in 0..<inputsToSign.count {
+        //            let previousUnspentOutput = selectedOutputsInfo.unspentOutputs[i]
+        //
+        //            let sigScriptData = try inputSigner.sigScriptData(transaction: transaction, inputsToSign: inputsToSign, outputs: outputs, index: i)
+        //            switch previousUnspentOutput.output.scriptType {
+        //            case .p2wpkh:
+        //                transaction.segWit = true
+        //                inputsToSign[i].input.witnessData.append(contentsOf: sigScriptData)
+        //            case .p2wpkhSh:
+        //                transaction.segWit = true
+        //                let witnessProgram = OpCode.scriptWPKH(previousUnspentOutput.publicKey.keyHash)
+        //                inputsToSign[i].input.signatureScript = scriptBuilder.unlockingScript(params: [witnessProgram])
+        //                inputsToSign[i].input.witnessData.append(contentsOf: sigScriptData)
+        //            default: inputsToSign[i].input.signatureScript = scriptBuilder.unlockingScript(params: sigScriptData)
+        //            }
+        //        }
         
         transaction.status = .new
         transaction.isMine = true
         transaction.isOutgoing = true
         
-        return (transaction, preparedInputs, outputs)
-        
-        //return FullTransaction(header: transaction, inputs: inputsToSign.map{ $0.input }, outputs: outputs)
+        let fullTx = FullTransaction(header: transaction, inputs: inputsToSign.map{ $0.input }, outputs: outputs)
+        return (fullTx, preparedInputs, publicKeys)
     }
     
     func completeProcessingColdTransaction(transaction: FullTransaction) throws -> FullTransaction {
         return transaction
     }
     
-    private func prepareForSignature(transaction: Transaction, inputsToSign: [InputToSign], outputs: [Output], index: Int, network: INetwork) throws -> NonSignedInput {
+    private func prepareForSignature(transaction: Transaction, inputsToSign: [InputToSign], outputs: [Output], index: Int, network: INetwork) throws -> Data {
         let input = inputsToSign[index]
         let previousOutput = input.previousOutput
         let pubKey = input.previousOutputPublicKey
@@ -235,9 +231,9 @@ extension TransactionBuilder: ITransactionBuilder {
         //default: return [signature, publicKey]
         //}
         
-        return (serializedTransaction, signatureHash)
+        return signatureHash
     }
-
+    
     
     // MARK: - End Kamino additions
     // --------------------------------------------------------------------------------------------------------------------------------------------------------------------
