@@ -23,7 +23,7 @@ public extension Error {
     }
 
     // Same typed Equality
-    public func isEqual(to: Self) -> Bool {
+    func isEqual(to: Self) -> Bool {
         return self.reflectedString == to.reflectedString
     }
 
@@ -45,9 +45,9 @@ extension Block {
 
 }
 
-extension BitcoinKit.KitState: Equatable {
+extension BitcoinCore.KitState: Equatable {
 
-    public static func ==(lhs: BitcoinKit.KitState, rhs: BitcoinKit.KitState) -> Bool {
+    public static func ==(lhs: BitcoinCore.KitState, rhs: BitcoinCore.KitState) -> Bool {
         switch (lhs, rhs) {
         case (.synced,   .synced): return true
         case let (.syncing(lProgress),   .syncing(rProgress)): return lProgress == rProgress

@@ -13,6 +13,8 @@ class BitcoinCoreBuilder {
     private var feeRateApiResource: String?
     private var walletId: String?
 
+    private var blockHeaderHasher: IHasher?
+
     // parameters with default values
     private var confirmationsThreshold = 6
     private var newWallet = false
@@ -85,6 +87,11 @@ class BitcoinCoreBuilder {
     // END KAMINO MOD:
     //--------------------------------------------------------------------------------------------------------------------------------------------------------
     
+    func set(blockHeaderHasher: IHasher) -> BitcoinCoreBuilder {
+        self.blockHeaderHasher = blockHeaderHasher
+        return self
+    }
+
     func build() throws -> BitcoinCore {
         // KAMINO MOD:
         //--------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -157,8 +164,8 @@ class BitcoinCoreBuilder {
         let networkMessageParser = NetworkMessageParser(magic: network.magic)
         let networkMessageSerializer = NetworkMessageSerializer(magic: network.magic)
 
-        let hasher = MerkleRootHasher()
-        let merkleBranch = MerkleBranch(hasher: hasher)
+        let doubleShaHasher = MerkleRootHasher()
+        let merkleBranch = MerkleBranch(hasher: doubleShaHasher)
         let merkleBlockValidator = MerkleBlockValidator(maxBlockSize: network.maxBlockSize, merkleBranch: merkleBranch)
 
         let factory = Factory(network: network, networkMessageParser: networkMessageParser, networkMessageSerializer: networkMessageSerializer, merkleBlockValidator: merkleBlockValidator)
@@ -184,7 +191,6 @@ class BitcoinCoreBuilder {
         let bloomFilterManager = BloomFilterManager(storage: storage, factory: factory)
 
         let peerManager = PeerManager()
-
 
         let peerGroup = PeerGroup(factory: factory, reachabilityManager: reachabilityManager,
                 peerAddressManager: peerAddressManager, peerCount: peerCount, peerManager: peerManager, logger: logger)
@@ -238,15 +244,34 @@ class BitcoinCoreBuilder {
 
         // this part can be moved to another place
 
-        let messageParsersConfigurator = NetworkMessageConfiguration(network: network)
-        bitcoinCore.add(messageParsers: messageParsersConfigurator.networkMessageParsers)
-        bitcoinCore.add(messageSerializers: messageParsersConfigurator.networkMessageSerializers)
+        let blockHeaderParser = BlockHeaderParser(hasher: blockHeaderHasher ?? doubleShaHasher)
+        bitcoinCore.add(messageParser: AddressMessageParser())
+                .add(messageParser: GetDataMessageParser())
+                .add(messageParser: InventoryMessageParser())
+                .add(messageParser: PingMessageParser())
+                .add(messageParser: PongMessageParser())
+                .add(messageParser: VerackMessageParser())
+                .add(messageParser: VersionMessageParser())
+                .add(messageParser: MemPoolMessageParser())
+                .add(messageParser: MerkleBlockMessageParser(blockHeaderParser: blockHeaderParser))
+                .add(messageParser: TransactionMessageParser())
+
+        bitcoinCore.add(messageSerializer: GetDataMessageSerializer())
+                .add(messageSerializer: GetBlocksMessageSerializer())
+                .add(messageSerializer: InventoryMessageSerializer())
+                .add(messageSerializer: PingMessageSerializer())
+                .add(messageSerializer: PongMessageSerializer())
+                .add(messageSerializer: VerackMessageSerializer())
+                .add(messageSerializer: MempoolMessageSerializer())
+                .add(messageSerializer: VersionMessageSerializer())
+                .add(messageSerializer: TransactionMessageSerializer())
+                .add(messageSerializer: FilterLoadMessageSerializer())
 
         let bloomFilterLoader = BloomFilterLoader(bloomFilterManager: bloomFilterManager)
         bloomFilterManager.delegate = bloomFilterLoader
         bitcoinCore.add(peerGroupListener: bloomFilterLoader)
 
-        let blockchain = Blockchain(storage: storage, network: network, factory: factory, listener: dataProvider)
+        let blockchain = Blockchain(storage: storage, blockValidator: bitcoinCore.blockValidatorChain, factory: factory, listener: dataProvider)
         let blockSyncer = BlockSyncer.instance(storage: storage, network: network, factory: factory, listener: kitStateProvider, transactionProcessor: transactionProcessor, blockchain: blockchain, addressManager: addressManager, bloomFilterManager: bloomFilterManager, logger: logger)
         let initialBlockDownload = InitialBlockDownload(blockSyncer: blockSyncer, peerManager: peerManager, syncStateListener: kitStateProvider, logger: logger)
 

@@ -9,6 +9,7 @@ class DashGrdbStorage: GrdbStorage {
             try db.create(table: Masternode.databaseTableName) { t in
                 t.column(Masternode.Columns.proRegTxHash.name, .text).notNull()
                 t.column(Masternode.Columns.confirmedHash.name, .text).notNull()
+                t.column(Masternode.Columns.confirmedHashWithProRegTxHash.name, .text).notNull()
                 t.column(Masternode.Columns.ipAddress.name, .text).notNull()
                 t.column(Masternode.Columns.port.name, .integer).notNull()
                 t.column(Masternode.Columns.pubKeyOperator.name, .date).notNull()
@@ -44,14 +45,12 @@ class DashGrdbStorage: GrdbStorage {
     }
 
     override func clearGrdb() throws {
-        try inTransaction {
-            _ = try write { db in
-                try Masternode.deleteAll(db)
-                try MasternodeListState.deleteAll(db)
-                try InstantTransactionInput.deleteAll(db)
-            }
-            try super.clearGrdb()
+        _ = try! dbPool.write { db in
+            try Masternode.deleteAll(db)
+            try MasternodeListState.deleteAll(db)
+            try InstantTransactionInput.deleteAll(db)
         }
+        try super.clearGrdb()
     }
 }
 

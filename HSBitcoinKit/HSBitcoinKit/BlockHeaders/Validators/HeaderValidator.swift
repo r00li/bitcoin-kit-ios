@@ -8,15 +8,15 @@ class HeaderValidator: IBlockValidator {
         difficultyEncoder = encoder
     }
 
-    func validate(candidate: Block, block: Block, network: INetwork) throws {
-        guard candidate.previousBlockHashReversedHex.reversedData == block.headerHash else {
-            throw BlockValidatorError.wrongPreviousHeaderHash
+    func validate(block: Block, previousBlock: Block) throws {
+        guard let headerHashBigInt = BigInt(block.headerHashReversedHex, radix: 16),
+              headerHashBigInt < difficultyEncoder.decodeCompact(bits: block.bits) else {
+            throw BitcoinCoreErrors.BlockValidation.invalidProofOfWork
         }
-        guard let headerHashBigInt = BigInt(candidate.headerHashReversedHex, radix: 16),
-              headerHashBigInt < difficultyEncoder.decodeCompact(bits: candidate.bits) else {
-            throw BlockValidatorError.invalidProofOfWork
-        }
+    }
 
+    func isBlockValidatable(block: Block, previousBlock: Block) -> Bool {
+        return true
     }
 
 }

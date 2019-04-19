@@ -1,21 +1,14 @@
 class Blockchain {
     private let storage: IStorage
-    private let network: INetwork
+    private let blockValidator: IBlockValidator
     private let factory: IFactory
     weak var listener: IBlockchainDataListener?
 
-    init(storage: IStorage, network: INetwork, factory: IFactory, listener: IBlockchainDataListener? = nil) {
+    init(storage: IStorage, blockValidator: IBlockValidator, factory: IFactory, listener: IBlockchainDataListener? = nil) {
         self.storage = storage
-        self.network = network
+        self.blockValidator = blockValidator
         self.factory = factory
         self.listener = listener
-    }
-
-    private func unstaleAllBlocks() throws {
-        for block in storage.blocks(stale: true) {
-            block.stale = false
-            try storage.update(block: block)
-        }
     }
 
 }
@@ -33,7 +26,7 @@ extension Blockchain: IBlockchain {
 
         // Validate and chain new blocks
         let block = factory.block(withHeader: merkleBlock.header, previousBlock: previousBlock)
-        try network.validate(block: block, previousBlock: previousBlock)
+        try blockValidator.validate(block: block, previousBlock: previousBlock)
         block.stale = true
 
         try storage.add(block: block)
@@ -51,28 +44,26 @@ extension Blockchain: IBlockchain {
         return block
     }
 
-    func handleFork() {
+    func handleFork() throws {
         guard let firstStaleHeight = storage.block(stale: true, sortedHeight: "ASC")?.height else {
             return
         }
 
         let lastNotStaleHeight = storage.block(stale: false, sortedHeight: "DESC")?.height ?? 0
 
-        try? storage.inTransaction {
-            if (firstStaleHeight <= lastNotStaleHeight) {
-                let lastStaleHeight = storage.block(stale: true, sortedHeight: "DESC")?.height ?? firstStaleHeight
+        if (firstStaleHeight <= lastNotStaleHeight) {
+            let lastStaleHeight = storage.block(stale: true, sortedHeight: "DESC")?.height ?? firstStaleHeight
 
-                if (lastStaleHeight > lastNotStaleHeight) {
-                    let notStaleBlocks = storage.blocks(heightGreaterThanOrEqualTo: firstStaleHeight, stale: false)
-                    try deleteBlocks(blocks: notStaleBlocks)
-                    try unstaleAllBlocks()
-                } else {
-                    let staleBlocks = storage.blocks(stale: true)
-                    try deleteBlocks(blocks: staleBlocks)
-                }
+            if (lastStaleHeight > lastNotStaleHeight) {
+                let notStaleBlocks = storage.blocks(heightGreaterThanOrEqualTo: firstStaleHeight, stale: false)
+                try deleteBlocks(blocks: notStaleBlocks)
+                try storage.unstaleAllBlocks()
             } else {
-                try unstaleAllBlocks()
+                let staleBlocks = storage.blocks(stale: true)
+                try deleteBlocks(blocks: staleBlocks)
             }
+        } else {
+            try storage.unstaleAllBlocks()
         }
     }
 

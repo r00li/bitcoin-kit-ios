@@ -12,25 +12,17 @@ class DarkGravityWaveValidatorTests: XCTestCase {
                                   1408731256, 1408732229, 1408732257, 1408732489] // 123433 - 123456
 
     private var validator: DarkGravityWaveValidator!
-    private var network: MockINetwork!
-    private var storage: MockIStorage!
+    private var mockBlockHelper: MockIBlockValidatorHelper!
 
-    private var candidate: Block!
+    private var blocks = [Block]()
 
     override func setUp() {
         super.setUp()
-        storage = MockIStorage()
+        mockBlockHelper = MockIBlockValidatorHelper()
 
-        validator = DarkGravityWaveValidator(storage: storage, encoder: DifficultyEncoder(), blockHelper: BlockHelper(storage: storage))
-        network = MockINetwork()
-        stub(network) { mock in
-            when(mock.heightInterval.get).thenReturn(24)
-            when(mock.targetTimeSpan.get).thenReturn(3600)
-            when(mock.maxTargetBits.get).thenReturn(0x1e0fffff)
-            when(mock.targetSpacing.get).thenReturn(150)
-        }
+        validator = DarkGravityWaveValidator(encoder: DifficultyEncoder(), blockHelper: mockBlockHelper, heightInterval: 24, targetTimeSpan: 3600, maxTargetBits: 0x1e0fffff, firstCheckpointHeight: 123432)
 
-        candidate = Block(
+        blocks.append(Block(
                 withHeader: BlockHeader(
                         version: 1,
                         headerHash: Data(),
@@ -40,36 +32,42 @@ class DarkGravityWaveValidatorTests: XCTestCase {
                         bits: 0x1b1441de,
                         nonce: 1
                 ),
-                height: 123457)
+                height: 123457))
+
+        for i in 0..<24 {
+            let block = Block(
+                    withHeader: BlockHeader(version: 1, headerHash: Data(from: i), previousBlockHeaderHash: Data(from: i), merkleRoot: Data(), timestamp: timestampArray[timestampArray.count - i - 1], bits: bitsArray[bitsArray.count - i - 1], nonce: 0),
+                    height: blocks[0].height - i - 1
+            )
+            blocks.append(block)
+        }
+        stub(mockBlockHelper) { mock in
+            for i in 0..<24 {
+                when(mock.previous(for: equal(to: blocks[i]), count: 1)).thenReturn(blocks[i + 1])
+            }
+        }
     }
 
     override func tearDown() {
         validator = nil
-        network = nil
-        storage = nil
+        mockBlockHelper = nil
 
-        candidate = nil
+        blocks.removeAll()
 
         super.tearDown()
     }
 
-    // MAKE real test data from bitcoin cash mainnet
-    func makeBlocks() {
-        var lastBlock = candidate
-        for i in 0..<24 {
-            let block = Block(
-                    withHeader: BlockHeader(version: 1, headerHash: Data(), previousBlockHeaderHash: Data(), merkleRoot: Data(), timestamp: timestampArray[timestampArray.count - i - 1], bits: bitsArray[bitsArray.count - i - 1], nonce: 0),
-                    height: candidate.height - i - 1
-            )
-            lastBlock?.previousBlock(storage: storage) = block
-            lastBlock = block
+    func testValidate() {
+        do {
+            try validator.validate(block: blocks[0], previousBlock: blocks[1])
+        } catch let error {
+            XCTFail("\(error) Exception Thrown")
         }
     }
 
-    func testValidate() {
-        makeBlocks()
+    func testTrust() {
         do {
-            try validator.validate(candidate: candidate, block: candidate.previousBlock!, network: network)
+            try validator.validate(block: blocks[1], previousBlock: blocks[2])
         } catch let error {
             XCTFail("\(error) Exception Thrown")
         }

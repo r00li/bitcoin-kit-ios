@@ -26,7 +26,6 @@ class BlockSyncerTests: QuickSpec {
             stub(mockStorage) { mock in
                 when(mock.blocksCount.get).thenReturn(1)
                 when(mock.lastBlock.get).thenReturn(nil)
-                when(mock.inTransaction(_: any())).then({ try? $0() })
                 when(mock.deleteBlockchainBlockHashes()).thenDoNothing()
             }
             stub(mockListener) { mock in
@@ -197,7 +196,7 @@ class BlockSyncerTests: QuickSpec {
                 }
             }
 
-            xdescribe("#prepareForDownload") {
+            describe("#prepareForDownload") {
                 let emptyBlocks = [Block]()
 
                 beforeEach {
@@ -234,7 +233,7 @@ class BlockSyncerTests: QuickSpec {
             }
 
             describe("#downloadIterationCompleted") {
-                xcontext("when iteration has partial blocks") {
+                context("when iteration has partial blocks") {
                     it("handles partial blocks") {
                         stub(mockState) { mock in
                             when(mock.iterationHasPartialBlocks.get).thenReturn(true)
@@ -268,7 +267,7 @@ class BlockSyncerTests: QuickSpec {
                 }
             }
 
-            xdescribe("#downloadFailed") {
+            describe("#downloadFailed") {
                 let emptyBlocks = [Block]()
 
                 beforeEach {
@@ -325,7 +324,7 @@ class BlockSyncerTests: QuickSpec {
                     stub(mockStorage) { mock in
                         when(mock.lastBlockchainBlockHash.get).thenReturn(nil)
                         when(mock.blocks(heightGreaterThan: equal(to: checkpointBlock.height), sortedBy: equal(to: Block.Columns.height), limit: equal(to: 10))).thenReturn([Block]())
-                        when(mock.block(byHeight: equal(to: peerLastBlockHeight))).thenReturn(nil)
+                        when(mock.block(byHeight: Int(peerLastBlockHeight))).thenReturn(nil)
                     }
                 }
 
@@ -364,7 +363,7 @@ class BlockSyncerTests: QuickSpec {
                 context("when the peers last block is already in storage") {
                     it("returns peers last block's headerHash instead of checkpointBlocks'") {
                         stub(mockStorage) { mock in
-                            when(mock.block(byHeight: equal(to: peerLastBlockHeight))).thenReturn(firstBlock)
+                            when(mock.block(byHeight: Int(peerLastBlockHeight))).thenReturn(firstBlock)
                         }
 
                         expect(syncer.getBlockLocatorHashes(peerLastBlockHeight: peerLastBlockHeight)).to(equal([firstBlock.headerHash]))
@@ -415,7 +414,7 @@ class BlockSyncerTests: QuickSpec {
                 }
             }
 
-            xdescribe("#handle(merkleBlock:,maxBlockHeight:)") {
+            describe("#handle(merkleBlock:,maxBlockHeight:)") {
                 let block = TestData.firstBlock
                 let merkleBlock = MerkleBlock(header: block.header, transactionHashes: [], transactions: [])
                 let maxBlockHeight: Int32 = Int32(block.height + 100)

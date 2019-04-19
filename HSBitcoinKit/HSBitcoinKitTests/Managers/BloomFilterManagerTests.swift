@@ -9,7 +9,7 @@ class BloomFilterManagerTests: QuickSpec {
     override func spec() {
         let mockStorage = MockIStorage()
         let mockFactory = MockIFactory()
-        let mockBloomFilterManagerDelegate = MockBloomFilterManagerDelegate()
+        let mockBloomFilterManagerDelegate = MockIBloomFilterManagerDelegate()
 
         let bloomFilter = BloomFilter(elements: [Data(from: 9999999)])
         let lastBlock = TestData.checkpointBlock
@@ -74,14 +74,13 @@ class BloomFilterManagerTests: QuickSpec {
                 beforeEach {
                     stub(mockStorage) { mock in
                         when(mock.publicKeys()).thenReturn([])
-                        when(mock.outputsWithPublicKeys()).thenReturn([OutputWithPublicKey(output: output1, publicKey: TestData.pubKey())])
                     }
                 }
 
                 context("when output is not spent") {
                     beforeEach {
                         stub(mockStorage) { mock in
-                            when(mock.inputsWithBlock(ofOutput: any())).thenReturn([])
+                            when(mock.outputsWithPublicKeys()).thenReturn([OutputWithPublicKey(output: output1, publicKey: TestData.pubKey(), spendingInput: nil, spendingBlockHeight: nil)])
                         }
                     }
 
@@ -103,7 +102,7 @@ class BloomFilterManagerTests: QuickSpec {
                     context("when spending transaction is in mempool") {
                         beforeEach {
                             stub(mockStorage) { mock in
-                                when(mock.inputsWithBlock(ofOutput: equal(to: output1))).thenReturn([InputWithBlock(input: input, block: nil)])
+                                when(mock.outputsWithPublicKeys()).thenReturn([OutputWithPublicKey(output: output1, publicKey: TestData.pubKey(), spendingInput: input, spendingBlockHeight: nil)])
                             }
                         }
 
@@ -118,17 +117,11 @@ class BloomFilterManagerTests: QuickSpec {
                     }
 
                     context("when spending transaction is in block") {
-                        let block = TestData.firstBlock
-
-                        beforeEach {
-                            stub(mockStorage) { mock in
-                                when(mock.inputsWithBlock(ofOutput: equal(to: output1))).thenReturn([InputWithBlock(input: input, block: block)])
-                            }
-                        }
-
                         context("when block is not far enough in history") {
                             beforeEach {
-                                block.height = lastBlock.height - 98
+                                stub(mockStorage) { mock in
+                                    when(mock.outputsWithPublicKeys()).thenReturn([OutputWithPublicKey(output: output1, publicKey: TestData.pubKey(), spendingInput: input, spendingBlockHeight: lastBlock.height - 98)])
+                                }
                             }
 
                             it("adds output to bloom filter") {
@@ -143,7 +136,9 @@ class BloomFilterManagerTests: QuickSpec {
 
                         context("when block is far enough") {
                             beforeEach {
-                                block.height = lastBlock.height - 100
+                                stub(mockStorage) { mock in
+                                    when(mock.outputsWithPublicKeys()).thenReturn([OutputWithPublicKey(output: output1, publicKey: TestData.pubKey(), spendingInput: input, spendingBlockHeight: lastBlock.height - 100)])
+                                }
                             }
 
                             it("doesn't add output to bloom filter") {

@@ -1,17 +1,15 @@
 import HSCryptoKit
 
-typealias MessageParsers = SetOfResponsibility<Data, IMessage>
-
 class NetworkMessageParser: INetworkMessageParser {
     private let magic: UInt32
-    var messageParsers = MessageParsers()
+    private var messageParsers = [String: IMessageParser]()
 
     init(magic: UInt32) {
         self.magic = magic
     }
 
-    func add(chain element: MessageParsers) {
-        messageParsers.union(element)
+    func add(parser: IMessageParser) {
+        messageParsers[parser.id] = parser
     }
 
     func parse(data: Data) -> NetworkMessage? {
@@ -35,18 +33,18 @@ class NetworkMessageParser: INetworkMessageParser {
             return nil
         }
 
-        let message = messageParsers.process(id: command, payload) ?? UnknownMessage(data: payload)
+        let message = messageParsers[command]?.parse(data: payload) ?? UnknownMessage(data: payload)
 
         return NetworkMessage(magic: magic, command: command, length: length, checksum: checksum, message: message)
     }
 
 }
 
-class AddressMessageParser: ListElement<Data, IMessage> {
-    override var id: String { return "addr" }
+class AddressMessageParser: IMessageParser {
+    var id: String { return "addr" }
 
-    override func process(_ request: Data) -> IMessage? {
-        let byteStream = ByteStream(request)
+    func parse(data: Data) -> IMessage {
+        let byteStream = ByteStream(data)
 
         let count = byteStream.read(VarInt.self)
 
@@ -61,11 +59,11 @@ class AddressMessageParser: ListElement<Data, IMessage> {
 
 }
 
-class GetDataMessageParser: ListElement<Data, IMessage> {
-    override var id: String { return "getdata" }
+class GetDataMessageParser: IMessageParser {
+    var id: String { return "getdata" }
 
-    override func process(_ request: Data) -> IMessage? {
-        let byteStream = ByteStream(request)
+    func parse(data: Data) -> IMessage {
+        let byteStream = ByteStream(data)
 
         let count = byteStream.read(VarInt.self)
 
@@ -82,11 +80,11 @@ class GetDataMessageParser: ListElement<Data, IMessage> {
 
 }
 
-class InventoryMessageParser: ListElement<Data, IMessage> {
-    override var id: String { return "inv" }
+class InventoryMessageParser: IMessageParser {
+    var id: String { return "inv" }
 
-    override func process(_ request: Data) -> IMessage? {
-        let byteStream = ByteStream(request)
+    func parse(data: Data) -> IMessage {
+        let byteStream = ByteStream(data)
 
         let count = byteStream.read(VarInt.self)
 
@@ -108,40 +106,40 @@ class InventoryMessageParser: ListElement<Data, IMessage> {
 
 }
 
-class PingMessageParser: ListElement<Data, IMessage> {
-    override var id: String { return "ping" }
+class PingMessageParser: IMessageParser {
+    var id: String { return "ping" }
 
-    override func process(_ request: Data) -> IMessage? {
-        let byteStream = ByteStream(request)
+    func parse(data: Data) -> IMessage {
+        let byteStream = ByteStream(data)
         return PingMessage(nonce: byteStream.read(UInt64.self))
     }
 
 }
 
-class PongMessageParser: ListElement<Data, IMessage> {
-    override var id: String { return "pong" }
+class PongMessageParser: IMessageParser {
+    var id: String { return "pong" }
 
-    override func process(_ request: Data) -> IMessage? {
-        let byteStream = ByteStream(request)
+    func parse(data: Data) -> IMessage {
+        let byteStream = ByteStream(data)
         return PongMessage(nonce: byteStream.read(UInt64.self))
     }
 
 }
 
-class VerackMessageParser: ListElement<Data, IMessage> {
-    override var id: String { return "verack" }
+class VerackMessageParser: IMessageParser {
+    var id: String { return "verack" }
 
-    override func process(_ request: Data) -> IMessage? {
+    func parse(data: Data) -> IMessage {
         return VerackMessage()
     }
 
 }
 
-class VersionMessageParser: ListElement<Data, IMessage> {
-    override var id: String { return "version" }
+class VersionMessageParser: IMessageParser {
+    var id: String { return "version" }
 
-    override func process(_ request: Data) -> IMessage? {
-        let byteStream = ByteStream(request)
+    func parse(data: Data) -> IMessage {
+        let byteStream = ByteStream(data)
 
         let version = byteStream.read(Int32.self)
         let services = byteStream.read(UInt64.self)
@@ -161,30 +159,28 @@ class VersionMessageParser: ListElement<Data, IMessage> {
 
 }
 
-class MemPoolMessageParser: ListElement<Data, IMessage> {
-    override var id: String { return "mempool" }
+class MemPoolMessageParser: IMessageParser {
+    var id: String { return "mempool" }
 
-    override func process(_ request: Data) -> IMessage? {
+    func parse(data: Data) -> IMessage {
         return MemPoolMessage()
     }
 
 }
 
-class MerkleBlockMessageParser: ListElement<Data, IMessage> {
-    override var id: String { return  "merkleblock" }
+class MerkleBlockMessageParser: IMessageParser {
+    var id: String { return  "merkleblock" }
 
-    private let network: INetwork
+    private let blockHeaderParser: IBlockHeaderParser
 
-    init(network: INetwork) {
-        self.network = network
-
-        super.init()
+    init(blockHeaderParser: IBlockHeaderParser) {
+        self.blockHeaderParser = blockHeaderParser
     }
 
-    override func process(_ request: Data) -> IMessage? {
-        let byteStream = ByteStream(request)
+    func parse(data: Data) -> IMessage {
+        let byteStream = ByteStream(data)
 
-        let blockHeader = BlockHeaderSerializer.deserialize(byteStream: byteStream, network: network)
+        let blockHeader = blockHeaderParser.parse(byteStream: byteStream)
 
         let totalTransactions = byteStream.read(UInt32.self)
         let numberOfHashes = byteStream.read(VarInt.self)
@@ -206,20 +202,20 @@ class MerkleBlockMessageParser: ListElement<Data, IMessage> {
 
 }
 
-class TransactionMessageParser: ListElement<Data, IMessage> {
-    override var id: String { return "tx" }
+class TransactionMessageParser: IMessageParser {
+    var id: String { return "tx" }
 
-    override func process(_ request: Data) -> IMessage? {
-        return TransactionMessage(transaction: TransactionSerializer.deserialize(data: request))
+    func parse(data: Data) -> IMessage {
+        return TransactionMessage(transaction: TransactionSerializer.deserialize(data: data))
     }
 
 }
 
-class UnknownMessageParser: ListElement<Data, IMessage> {
-    override var id: String { return "unknown" }
+class UnknownMessageParser: IMessageParser {
+    var id: String { return "unknown" }
 
-    override func process(_ request: Data) -> IMessage? {
-        return UnknownMessage(data: request)
+    func parse(data: Data) -> IMessage {
+        return UnknownMessage(data: data)
     }
 
 }

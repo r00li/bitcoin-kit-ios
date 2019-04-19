@@ -87,8 +87,8 @@ class PeerGroup {
 
         _started = true
 
-        connectPeersIfRequired()
         peerGroupListeners.forEach { $0.onStart() } // potential broke order of call functions
+        connectPeersIfRequired()
     }
 
     private func _stop() {
@@ -149,7 +149,7 @@ extension PeerGroup: IPeerGroup {
             throw BitcoinCoreErrors.PeerGroup.noConnectedPeers
         }
 
-        guard peerManager.nonSyncedPeer() == nil else {
+        guard peerManager.halfIsSynced() else {
             throw BitcoinCoreErrors.PeerGroup.peersNotSynced
         }
     }

@@ -3,11 +3,14 @@ import HSBitcoinKit
 import RxSwift
 
 class Manager {
+    enum KitType: Int { case bitcoin, bitcoinCash, dash }
+
     static let shared = Manager()
 
     private let keyWords = "mnemonic_words"
+    private let keyKitType = "kit_type"
 
-    var kit: BitcoinKit!
+    var kit: AbstractKit!
 
     let kitInitializationCompleted = BehaviorSubject<Bool>(value: false)
 
@@ -17,14 +20,15 @@ class Manager {
     let transactionsSubject = PublishSubject<Void>()
 
     init() {
-        if let words = savedWords {
-            initWalletKit(words: words)
+        if let words = savedWords, let kitType = savedKitType  {
+            initWalletKit(words: words, kitType: kitType)
         }
     }
 
-    func login(words: [String]) {
+    func login(words: [String], kitType: KitType = .bitcoin) {
         save(words: words)
-        initWalletKit(words: words)
+        save(kitType: kitType)
+        initWalletKit(words: words, kitType: kitType)
     }
 
     func logout() {
@@ -35,19 +39,28 @@ class Manager {
         }
 
         clearWords()
+        clearKitType()
 
         kitInitializationCompleted.onNext(false)
         kit = nil
     }
 
-    private func initWalletKit(words: [String]) {
-        kit =  try! BitcoinKit(withPublicKey: "tpubDDYDWoUhYtXEFLqrfdL4UeKCBPLMDZBb2Svfi7UeCvEt4pWHiBD2AkvVYCUBsk4uHo9yYMJc1uQjtjaLPTx8RBKuZv844rmnZ9CsAb41fJ4", walletId: "SomeId", testMode: true, minLogLevel: .verbose)
-        //bitcoinKit = BitcoinKit(withWords: words, coin: self.coin, walletId: "SomeId", confirmationsThreshold: 1)
-        kit.delegate = self
-        
-        // FROM MASTER:
-        //kit = try! BitcoinKit(withWords: words, walletId: "SomeId", testMode: true, minLogLevel: .verbose)
-        //kit.delegate = self
+    private func initWalletKit(words: [String], kitType: KitType) {
+        switch kitType {
+        case .bitcoin:
+            let kit =  try! BitcoinKit(withPublicKey: "tpubDDYDWoUhYtXEFLqrfdL4UeKCBPLMDZBb2Svfi7UeCvEt4pWHiBD2AkvVYCUBsk4uHo9yYMJc1uQjtjaLPTx8RBKuZv844rmnZ9CsAb41fJ4", walletId: "SomeId3", testMode: true, minLogLevel: .verbose)
+            //let kit = try! BitcoinKit(withWords: words, walletId: "SomeId", networkType: BitcoinKit.NetworkType.testNet, minLogLevel: .verbose)
+            self.kit = kit
+            kit.delegate = self
+        case .bitcoinCash:
+            let kit = try! BitcoinCashKit(withWords: words, walletId: "SomeId", networkType: BitcoinCashKit.NetworkType.testNet, minLogLevel: .verbose)
+            self.kit = kit
+            kit.delegate = self
+        case .dash:
+            let kit = try! DashKit(withWords: words, walletId: "SomeId", networkType: DashKit.NetworkType.testNet, minLogLevel: .verbose)
+            self.kit = kit
+            kit.delegate = self
+        }
 
         kitInitializationCompleted.onNext(true)
     }
@@ -66,6 +79,23 @@ class Manager {
 
     private func clearWords() {
         UserDefaults.standard.removeObject(forKey: keyWords)
+        UserDefaults.standard.synchronize()
+    }
+
+    private var savedKitType: KitType? {
+        if let kitType = UserDefaults.standard.value(forKey: keyKitType) as? Int {
+            return KitType.init(rawValue: kitType)
+        }
+        return nil
+    }
+
+    private func save(kitType: KitType) {
+        UserDefaults.standard.set(kitType.rawValue, forKey: keyKitType)
+        UserDefaults.standard.synchronize()
+    }
+
+    private func clearKitType() {
+        UserDefaults.standard.removeObject(forKey: keyKitType)
         UserDefaults.standard.synchronize()
     }
 
