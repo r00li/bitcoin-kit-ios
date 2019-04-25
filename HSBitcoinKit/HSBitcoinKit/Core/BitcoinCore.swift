@@ -143,20 +143,11 @@ extension BitcoinCore {
             return nil
         }
         
-        var fromTimestamp: Int? = nil
-        var fromOrder: Int? = nil
-        
         if let fromTransaction = self.storage.transaction(byHashHex: fromHash) {
-            fromTimestamp = fromTransaction.timestamp
-            fromOrder = fromTransaction.order
-        }
-        
-        let transactions = self.storage.fullTransactionsInfo(fromTimestamp: fromTimestamp, fromOrder: fromOrder, limit: 1)
-        if let transaction = transactions.first {
-            let inputs = transaction.inputsWithPreviousOutputs.compactMap( { $0.input } )
-            let outputs = transaction.outputs
+            let inputs = self.storage.inputs(ofTransaction: fromTransaction)
+            let outputs = self.storage.outputs(ofTransaction: fromTransaction)
             
-            return FullTransaction(header: transaction.transactionWithBlock.transaction, inputs: inputs, outputs: outputs)
+            return FullTransaction(header: fromTransaction, inputs: inputs, outputs: outputs)
         }
         
         return nil
