@@ -1,9 +1,9 @@
 Pod::Spec.new do |spec|
-  spec.name = 'BitcoinCore.swift'
+  spec.name = 'BitcoinKit'
   spec.version = '0.4.4'
-  spec.summary = 'Core library Bitcoin derived wallets for Swift'
+  spec.summary = 'Bitcoin library for Swift'
   spec.description = <<-DESC
-                       BitcoinCore implements Bitcoin core protocol in Swift. It is an implementation of the Bitcoin SPV protocol written (almost) entirely in swift.
+                       BitcoinKit implements Bitcoin protocol in Swift.
                        ```
                     DESC
   spec.homepage = 'https://github.com/horizontalsystems/bitcoin-kit-ios'
@@ -13,10 +13,11 @@ Pod::Spec.new do |spec|
 
   spec.requires_arc = true
   spec.source = { git: 'https://github.com/horizontalsystems/bitcoin-kit-ios.git', tag: "#{spec.version}" }
-  spec.source_files = 'BitcoinCore/BitcoinCore/**/*.{h,m,swift}'
+  spec.source_files = 'BitcoinKit/BitcoinKit/**/*.{h,m,swift}'
   spec.ios.deployment_target = '11.0'
   spec.swift_version = '4.2'
 
+  spec.dependency 'BitcoinCore.swift', '~> 0.4.4'
   spec.dependency 'HSCryptoKit', '~> 1.3.0'
   spec.dependency 'HSHDWalletKit', '~> 1.0.4'
   spec.dependency 'Alamofire', '~> 4.8.0'
