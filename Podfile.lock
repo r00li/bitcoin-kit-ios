@@ -3,32 +3,29 @@ PODS:
   - BigInt (3.1.0):
     - SipHash (~> 1.2)
   - Cuckoo (0.12.1)
-  - GRDB.swift (3.6.2)
+  - GRDB.swift (3.7.0)
   - HSCryptoKit (1.3.0)
   - HSCryptoX11 (1.0.0)
   - HSHDWalletKit (1.0.4):
     - HSCryptoKit (~> 1.3.0)
   - Nimble (8.0.1)
   - ObjectMapper (3.4.2)
-  - Quick (2.0.0)
-  - RxAtomic (4.4.2)
-  - RxBlocking (4.4.2):
-    - RxAtomic (>= 4.4.2, ~> 4.4)
+  - Quick (2.1.0)
+  - RxBlocking (4.5.0):
     - RxSwift (>= 4.4.2, ~> 4.4)
-  - RxSwift (4.4.2):
-    - RxAtomic (>= 4.4.2, ~> 4.4)
+  - RxSwift (4.5.0)
   - SipHash (1.2.2)
 
 DEPENDENCIES:
-  - Alamofire (~> 4.8.0)
-  - BigInt (~> 3.1.0)
+  - Alamofire (~> 4.0)
+  - BigInt (~> 3.0)
   - Cuckoo
-  - GRDB.swift (~> 3.6.2)
-  - HSCryptoKit (~> 1.3.0)
+  - GRDB.swift (~> 3.0)
+  - HSCryptoKit (~> 1.0)
   - HSCryptoX11 (from `https://github.com/horizontalsystems/crypto-x11-ios`)
   - HSHDWalletKit (from `https://github.com/r00li/hd-wallet-kit-ios.git`, branch `master`)
   - Nimble
-  - ObjectMapper (~> 3.4.0)
+  - ObjectMapper (~> 3.0)
   - Quick
   - RxBlocking (~> 4.0)
   - RxSwift (~> 4.0)
@@ -43,7 +40,6 @@ SPEC REPOS:
     - Nimble
     - ObjectMapper
     - Quick
-    - RxAtomic
     - RxBlocking
     - RxSwift
     - SipHash
@@ -67,18 +63,17 @@ SPEC CHECKSUMS:
   Alamofire: ae5c501addb7afdbb13687d7f2f722c78734c2d3
   BigInt: 76b5dfdfa3e2e478d4ffdf161aeede5502e2742f
   Cuckoo: 2f10364798baa4b0d4aacabfa475249cf29977bc
-  GRDB.swift: e10787d857b6b8135354b9e08fb23b4bb8e2fab7
+  GRDB.swift: 51cc9e57ae8ff7083a9d674c97925aa1de06aac5
   HSCryptoKit: 564a3888691658cba58aa60f7d037654fd3c6fb0
   HSCryptoX11: 9619fbffb53e9de913d77a531c5ef35cd0402dfe
   HSHDWalletKit: e09162c2bb121c9db9b0cf203bd93b40965aad74
   Nimble: 45f786ae66faa9a709624227fae502db55a8bdd0
   ObjectMapper: 0d4402610f4e468903ae64629eec4784531e5c51
-  Quick: ce1276c7c27ba2da3cb2fd0cde053c3648b3b22d
-  RxAtomic: d00e97c10db88c6f08540e0bf2752fc5a2404167
-  RxBlocking: e96fdda1473d81332a6ed2cface935dc2167a122
-  RxSwift: 74c29b693c8e42b0f64400e8b06564575742d649
+  Quick: 4be43f6634acfa727dd106bdf3929ce125ffa79d
+  RxBlocking: 79413e4d916f44bb3e113c5b2cc059e36fe58910
+  RxSwift: f172070dfd1a93d70a9ab97a5a01166206e1c575
   SipHash: fad90a4683e420c52ef28063063dbbce248ea6d4
 
-PODFILE CHECKSUM: 1f1af6a968bcb1c97c05b8277ac3ab4fe52499b7
+PODFILE CHECKSUM: ea0f44e326c029c242dd16bad4b25a74231d1214
 
 COCOAPODS: 1.5.3
