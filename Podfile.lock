@@ -1,6 +1,7 @@
 PODS:
   - Alamofire (4.8.2)
-  - BigInt (4.0.0)
+  - BigInt (3.1.0):
+    - SipHash (~> 1.2)
   - CryptoX11.swift (1.0)
   - Cuckoo (1.0.1)
   - GRDB.swift (3.7.0)
@@ -13,10 +14,11 @@ PODS:
   - RxBlocking (4.5.0):
     - RxSwift (>= 4.4.2, ~> 4.4)
   - RxSwift (4.5.0)
+  - SipHash (1.2.2)
 
 DEPENDENCIES:
   - Alamofire (~> 4.0)
-  - BigInt (~> 4.0)
+  - BigInt (~> 3.1)
   - CryptoX11.swift (from `https://github.com/horizontalsystems/crypto-x11-ios`)
   - Cuckoo
   - GRDB.swift (~> 3.0)
@@ -39,6 +41,7 @@ SPEC REPOS:
     - Quick
     - RxBlocking
     - RxSwift
+    - SipHash
 
 EXTERNAL SOURCES:
   CryptoX11.swift:
@@ -62,7 +65,7 @@ CHECKOUT OPTIONS:
 
 SPEC CHECKSUMS:
   Alamofire: ae5c501addb7afdbb13687d7f2f722c78734c2d3
-  BigInt: 2aad1a9942dc932ec8b84290d2c564a3d76f97ab
+  BigInt: 76b5dfdfa3e2e478d4ffdf161aeede5502e2742f
   CryptoX11.swift: 59db498ef7934eb3c0a9e84a9c1848996a3c2282
   Cuckoo: 0c26b6dfa7445b8635ac442db85e343abb484bda
   GRDB.swift: 51cc9e57ae8ff7083a9d674c97925aa1de06aac5
@@ -73,7 +76,8 @@ SPEC CHECKSUMS:
   Quick: 4be43f6634acfa727dd106bdf3929ce125ffa79d
   RxBlocking: 79413e4d916f44bb3e113c5b2cc059e36fe58910
   RxSwift: f172070dfd1a93d70a9ab97a5a01166206e1c575
+  SipHash: fad90a4683e420c52ef28063063dbbce248ea6d4
 
-PODFILE CHECKSUM: 6c4aaa213a2316df2df36b9247eece88bbbc8fa5
+PODFILE CHECKSUM: ddad3431f4559dcf1f34fd33eabd984d9832fd86
 
 COCOAPODS: 1.5.3
