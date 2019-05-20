@@ -539,10 +539,6 @@ extension GrdbStorage: IStorage {
             if let limit = limit {
                 sql += " LIMIT \(limit)"
             }
-            
-            sql = sql + " " + """
-            ORDER BY transactions.timestamp DESC, transactions."order" DESC
-            """
 
             let rows = try Row.fetchCursor(db, sql, adapter: adapter)
 

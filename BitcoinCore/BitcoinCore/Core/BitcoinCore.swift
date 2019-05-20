@@ -158,8 +158,8 @@ extension BitcoinCore {
         }
         
         if let fromHashData = Data(hex: fromHash), let fromTransaction = self.storage.transaction(byHash: Data(fromHashData.reversed())) {
-            let inputs = self.storage.inputs(ofTransaction: fromTransaction)
-            let outputs = self.storage.outputs(ofTransaction: fromTransaction)
+            let inputs = self.storage.inputs(transactionHash: fromHashData)
+            let outputs = self.storage.outputs(transactionHash: fromHashData)
             
             return FullTransaction(header: fromTransaction, inputs: inputs, outputs: outputs)
         }
@@ -167,13 +167,14 @@ extension BitcoinCore {
         return nil
     }
     
-    public func createColdWalletTransaction(to address: String, value: Int, feePriority: FeePriority = .medium) throws -> NonSignedTransaction {
+    public func createColdWalletTransaction(to address: String, value: Int, feeRate: Int) throws -> NonSignedTransaction {
         // Modified send function that normally calls many methods. This removes the unecessary middle steps
         
-        try peerGroup.checkPeersSynced()
+        // TODO: Find a suitable replacement
+        //try peerGroup.checkPeersSynced()
         
         //let transaction = try transactionBuilder.buildTransaction(value: value, feeRate: transactionFee.medium, senderPay: true, toAddress: address)
-        let transaction = try transactionBuilder.buildColdTransaction(value: value, feeRate: getFeeRate(priority: feePriority), senderPay: true, toAddress: address)
+        let transaction = try transactionBuilder.buildColdTransaction(value: value, feeRate: feeRate, senderPay: true, toAddress: address)
         print(transaction)
         //return transaction
         //try transactionProcessor.processCreated(transaction: transaction)

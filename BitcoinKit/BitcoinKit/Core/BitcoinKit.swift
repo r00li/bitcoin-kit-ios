@@ -82,9 +82,8 @@ public class BitcoinKit: AbstractKit {
     
     public init(withPublicKey: String, walletId: String, testMode: Bool = false, minLogLevel: Logger.Level = .verbose) throws {
         let networkType: NetworkType = testMode ? .testNet : .mainNet
-        
         let network: INetwork
-        var initialSyncApiUrl: String? = nil
+        let initialSyncApiUrl: String
         
         switch networkType {
         case .mainNet:
@@ -93,25 +92,25 @@ public class BitcoinKit: AbstractKit {
         case .testNet:
             network = TestNet()
             initialSyncApiUrl = "http://btc-testnet.horizontalsystems.xyz/apg"
-        case .regTest: network = RegTest()
+        case .regTest:
+            network = RegTest()
+            initialSyncApiUrl = ""
         }
+        let initialSyncApi = BCoinApi(url: initialSyncApiUrl)
         
-        let databaseFileName = "\(walletId)-bitcoin-\(networkType)"
-        
-        let storage = GrdbStorage(databaseFileName: databaseFileName)
+        let databaseFilePath = try DirectoryHelper.directoryURL(for: "BitcoinKit").appendingPathComponent("\(walletId)-\(networkType)").path
+        let storage = GrdbStorage(databaseFilePath: databaseFilePath)
         self.storage = storage
         
         let paymentAddressParser = PaymentAddressParser(validScheme: "bitcoin", removeScheme: true)
         let addressSelector = BitcoinAddressSelector()
-        let apiFeeRateResource = "BTC"
         
-        let bitcoinCore = try BitcoinCoreBuilder()
+        let bitcoinCore = try BitcoinCoreBuilder(minLogLevel: minLogLevel)
             .set(network: network)
-            .set(initialSyncApiUrl: initialSyncApiUrl)
+            .set(initialSyncApi: initialSyncApi)
             .set(xpub: withPublicKey)
             .set(paymentAddressParser: paymentAddressParser)
             .set(addressSelector: addressSelector)
-            .set(feeRateApiResource: apiFeeRateResource)
             .set(walletId: walletId)
             .set(peerSize: 10)
             .set(newWallet: false)
@@ -139,14 +138,12 @@ public class BitcoinKit: AbstractKit {
             bitcoinCore.add(blockValidator: LegacyDifficultyAdjustmentValidator(encoder: difficultyEncoder, blockValidatorHelper: blockHelper, heightInterval: BitcoinCore.heightInterval, targetTimespan: BitcoinCore.heightInterval * BitcoinCore.targetSpacing, maxTargetBits: BitcoinCore.maxTargetBits))
             bitcoinCore.add(blockValidator: LegacyTestNetDifficultyValidator(blockHelper: blockHelper, heightInterval: BitcoinCore.heightInterval, targetSpacing: BitcoinCore.targetSpacing, maxTargetBits: BitcoinCore.maxTargetBits))
         }
-
     }
     
     public init(withSeed seed: Data, walletId: String, testMode: Bool = false, minLogLevel: Logger.Level = .verbose) throws {
         let networkType: NetworkType = testMode ? .testNet : .mainNet
-        
         let network: INetwork
-        var initialSyncApiUrl: String? = nil
+        let initialSyncApiUrl: String
         
         switch networkType {
         case .mainNet:
@@ -155,25 +152,25 @@ public class BitcoinKit: AbstractKit {
         case .testNet:
             network = TestNet()
             initialSyncApiUrl = "http://btc-testnet.horizontalsystems.xyz/apg"
-        case .regTest: network = RegTest()
+        case .regTest:
+            network = RegTest()
+            initialSyncApiUrl = ""
         }
+        let initialSyncApi = BCoinApi(url: initialSyncApiUrl)
         
-        let databaseFileName = "\(walletId)-bitcoin-\(networkType)"
-        
-        let storage = GrdbStorage(databaseFileName: databaseFileName)
+        let databaseFilePath = try DirectoryHelper.directoryURL(for: "BitcoinKit").appendingPathComponent("\(walletId)-\(networkType)").path
+        let storage = GrdbStorage(databaseFilePath: databaseFilePath)
         self.storage = storage
         
         let paymentAddressParser = PaymentAddressParser(validScheme: "bitcoin", removeScheme: true)
         let addressSelector = BitcoinAddressSelector()
-        let apiFeeRateResource = "BTC"
         
-        let bitcoinCore = try BitcoinCoreBuilder()
+        let bitcoinCore = try BitcoinCoreBuilder(minLogLevel: minLogLevel)
             .set(network: network)
-            .set(initialSyncApiUrl: initialSyncApiUrl)
+            .set(initialSyncApi: initialSyncApi)
             .set(seed: seed)
             .set(paymentAddressParser: paymentAddressParser)
             .set(addressSelector: addressSelector)
-            .set(feeRateApiResource: apiFeeRateResource)
             .set(walletId: walletId)
             .set(peerSize: 10)
             .set(newWallet: false)
@@ -201,7 +198,6 @@ public class BitcoinKit: AbstractKit {
             bitcoinCore.add(blockValidator: LegacyDifficultyAdjustmentValidator(encoder: difficultyEncoder, blockValidatorHelper: blockHelper, heightInterval: BitcoinCore.heightInterval, targetTimespan: BitcoinCore.heightInterval * BitcoinCore.targetSpacing, maxTargetBits: BitcoinCore.maxTargetBits))
             bitcoinCore.add(blockValidator: LegacyTestNetDifficultyValidator(blockHelper: blockHelper, heightInterval: BitcoinCore.heightInterval, targetSpacing: BitcoinCore.targetSpacing, maxTargetBits: BitcoinCore.maxTargetBits))
         }
-
     }
     
     override open var debugInfo: String {

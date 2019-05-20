@@ -143,8 +143,8 @@ extension TransactionBuilder: ITransactionBuilder {
         
         let changeScriptType = ScriptType.p2pkh
         let address = try addressConverter.convert(address: toAddress)
-        let selectedOutputsInfo = try unspentOutputSelector.select(value: value, feeRate: feeRate, outputScriptType: address.scriptType, changeType: changeScriptType, senderPay: senderPay, unspentOutputs: unspentOutputProvider.allUnspentOutputs)
-        
+        let selectedOutputsInfo = try unspentOutputSelector.select(value: value, feeRate: feeRate, outputScriptType: address.scriptType, changeType: changeScriptType, senderPay: senderPay)
+
         if !senderPay {
             guard selectedOutputsInfo.fee < value else {
                 throw BuildError.feeMoreThanValue
