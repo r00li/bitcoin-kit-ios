@@ -9,7 +9,7 @@ public class BitcoinCoreErrors {
         case wrongAddressPrefix
     }
 
-    public enum PeerGroup: Error {
+    public enum TransactionSendError: Error {
         case noConnectedPeers
         case peersNotSynced
     }
@@ -49,5 +49,16 @@ public class BitcoinCoreErrors {
     public struct AddressConversionErrors: Error {
         let errors: [Error]
     }
+
+    public enum UnspentOutputSelection: Error {
+        case wrongValue
+        case emptyOutputs
+        case notEnough(maxFee: Int)
+    }
+
+    public enum Unexpected: Error {
+        case unkown
+    }
+
 
 }

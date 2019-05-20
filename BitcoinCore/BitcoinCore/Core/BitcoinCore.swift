@@ -11,9 +11,11 @@ public class BitcoinCore {
 
 
     private let storage: IStorage
-    private var dataProvider: IDataProvider & IBlockchainDataListener
+    private let cache: OutputsCache
+    private var dataProvider: IDataProvider
     private let addressManager: IAddressManager
     private let addressConverter: AddressConverterChain
+    private let unspentOutputSelector: UnspentOutputSelectorChain
     private let kitStateProvider: IKitStateProvider & ISyncStateListener
 
     private let scriptBuilder: ScriptBuilderChain
@@ -29,10 +31,13 @@ public class BitcoinCore {
 
     // START: Extending
 
-    public var peerGroup: IPeerGroup
-    public var transactionSyncer: ITransactionSyncer
+    public let peerGroup: IPeerGroup
+    public let initialBlockDownload: IInitialBlockDownload
+    public let syncedReadyPeerManager: ISyncedReadyPeerManager
+    public let transactionSyncer: ITransactionSyncer
 
-    let blockValidatorChain = BlockValidatorChain(proofOfWorkValidator: ProofOfWorkValidator(difficultyEncoder: DifficultyEncoder()))
+    let bloomFilterLoader: BloomFilterLoader
+    let blockValidatorChain: BlockValidatorChain
     let inventoryItemsHandlerChain = InventoryItemsHandlerChain()
     let peerTaskHandlerChain = PeerTaskHandlerChain()
 
@@ -58,10 +63,6 @@ public class BitcoinCore {
         return self
     }
 
-    public func add(peerGroupListener: IPeerGroupListener) {
-        peerGroup.add(peerGroupListener: peerGroupListener)
-    }
-
     public func prepend(scriptBuilder: IScriptBuilder) {
         self.scriptBuilder.prepend(scriptBuilder: scriptBuilder)
     }
@@ -70,28 +71,34 @@ public class BitcoinCore {
         self.addressConverter.prepend(addressConverter: addressConverter)
     }
 
+    public func prepend(unspentOutputSelector: IUnspentOutputSelector) {
+        self.unspentOutputSelector.prepend(unspentOutputSelector: unspentOutputSelector)
+    }
+
     // END: Extending
 
     public var delegateQueue = DispatchQueue(label: "bitcoin_delegate_queue")
-    var delegates = [BitcoinCoreDelegate]()
+    public weak var delegate: BitcoinCoreDelegate?
 
-    public func add(delegate: BitcoinCoreDelegate) {
-        delegates.append(delegate)
-    }
-
-
-    init(storage: IStorage, dataProvider: IDataProvider & IBlockchainDataListener,
-                peerGroup: IPeerGroup, transactionSyncer: ITransactionSyncer,
-                addressManager: IAddressManager, addressConverter: AddressConverterChain, kitStateProvider: IKitStateProvider & ISyncStateListener,
+    init(storage: IStorage, cache: OutputsCache, dataProvider: IDataProvider,
+                peerGroup: IPeerGroup, initialBlockDownload: IInitialBlockDownload, bloomFilterLoader: BloomFilterLoader,
+                syncedReadyPeerManager: ISyncedReadyPeerManager, transactionSyncer: ITransactionSyncer,
+                blockValidatorChain: BlockValidatorChain, addressManager: IAddressManager, addressConverter: AddressConverterChain, unspentOutputSelector: UnspentOutputSelectorChain, kitStateProvider: IKitStateProvider & ISyncStateListener,
                 scriptBuilder: ScriptBuilderChain, transactionBuilder: ITransactionBuilder, transactionCreator: ITransactionCreator,
                 paymentAddressParser: IPaymentAddressParser, networkMessageParser: NetworkMessageParser, networkMessageSerializer: NetworkMessageSerializer,
                 syncManager: SyncManager) {
         self.storage = storage
+        self.cache = cache
         self.dataProvider = dataProvider
         self.peerGroup = peerGroup
+        self.initialBlockDownload = initialBlockDownload
+        self.bloomFilterLoader = bloomFilterLoader
+        self.syncedReadyPeerManager = syncedReadyPeerManager
         self.transactionSyncer = transactionSyncer
+        self.blockValidatorChain = blockValidatorChain
         self.addressManager = addressManager
         self.addressConverter = addressConverter
+        self.unspentOutputSelector = unspentOutputSelector
         self.kitStateProvider = kitStateProvider
         self.scriptBuilder = scriptBuilder
         self.transactionBuilder = transactionBuilder
@@ -108,13 +115,12 @@ public class BitcoinCore {
 
 extension BitcoinCore {
 
-    public func start() throws {
+    public func start() {
         syncManager.start()
     }
 
-    public func clear() throws {
+    func stop() {
         syncManager.stop()
-        try storage.clear()
     }
 
 }
@@ -137,8 +143,8 @@ extension BitcoinCore {
         return dataProvider.transactions(fromHash: fromHash, limit: limit)
     }
 
-    public func send(to address: String, value: Int, feePriority: FeePriority = .medium) throws {
-        try transactionCreator.create(to: address, value: value, feeRate: getFeeRate(priority: feePriority), senderPay: true)
+    public func send(to address: String, value: Int, feeRate: Int) throws {
+        try transactionCreator.create(to: address, value: value, feeRate: feeRate, senderPay: true)
     }
     
     // KAMINO MOD:
@@ -191,8 +197,8 @@ extension BitcoinCore {
         return paymentAddressParser.parse(paymentAddress: paymentAddress)
     }
 
-    public func fee(for value: Int, toAddress: String? = nil, senderPay: Bool, feePriority: FeePriority = .medium) throws -> Int {
-        return try transactionBuilder.fee(for: value, feeRate: getFeeRate(priority: feePriority), senderPay: senderPay, address: toAddress)
+    public func fee(for value: Int, toAddress: String? = nil, senderPay: Bool, feeRate: Int) throws -> Int {
+        return try transactionBuilder.fee(for: value, feeRate: feeRate, senderPay: senderPay, address: toAddress)
     }
 
     public var receiveAddress: String {
@@ -203,23 +209,6 @@ extension BitcoinCore {
         return dataProvider.debugInfo
     }
 
-    private func getFeeRate(priority: FeePriority) -> Int {
-        switch priority {
-        case .lowest:
-            return dataProvider.feeRate.low
-        case .low:
-            return (dataProvider.feeRate.low + dataProvider.feeRate.medium) / 2
-        case .medium:
-            return dataProvider.feeRate.medium
-        case .high:
-            return (dataProvider.feeRate.medium + dataProvider.feeRate.high) / 2
-        case .highest:
-            return dataProvider.feeRate.high
-        case .custom(let value):
-            return value
-        }
-    }
-
 }
 
 extension BitcoinCore: IDataProviderDelegate {
@@ -227,21 +216,21 @@ extension BitcoinCore: IDataProviderDelegate {
     func transactionsUpdated(inserted: [TransactionInfo], updated: [TransactionInfo]) {
         delegateQueue.async { [weak self] in
             if let kit = self {
-                kit.delegates.forEach { $0.transactionsUpdated(inserted: inserted, updated: updated) }
+                kit.delegate?.transactionsUpdated(inserted: inserted, updated: updated)
             }
         }
     }
 
     func transactionsDeleted(hashes: [String]) {
         delegateQueue.async { [weak self] in
-            self?.delegates.forEach { $0.transactionsDeleted(hashes: hashes) }
+            self?.delegate?.transactionsDeleted(hashes: hashes)
         }
     }
 
     func balanceUpdated(balance: Int) {
         delegateQueue.async { [weak self] in
             if let kit = self {
-                kit.delegates.forEach { $0.balanceUpdated(balance: balance) }
+                kit.delegate?.balanceUpdated(balance: balance)
             }
         }
     }
@@ -249,7 +238,7 @@ extension BitcoinCore: IDataProviderDelegate {
     func lastBlockInfoUpdated(lastBlockInfo: BlockInfo) {
         delegateQueue.async { [weak self] in
             if let kit = self {
-                kit.delegates.forEach { $0.lastBlockInfoUpdated(lastBlockInfo: lastBlockInfo) }
+                kit.delegate?.lastBlockInfoUpdated(lastBlockInfo: lastBlockInfo)
             }
         }
     }
@@ -259,7 +248,7 @@ extension BitcoinCore: IDataProviderDelegate {
 extension BitcoinCore: IKitStateProviderDelegate {
     func handleKitStateUpdate(state: KitState) {
         delegateQueue.async { [weak self] in
-            self?.delegates.forEach { $0.kitStateUpdated(state: state) }
+            self?.delegate?.kitStateUpdated(state: state)
         }
     }
 }

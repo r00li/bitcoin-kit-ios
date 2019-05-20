@@ -5,35 +5,14 @@ open class GrdbStorage {
     public var dbPool: DatabasePool
     private var dbsInTransaction = [Int: Database]()
 
-    private let databaseName: String
-    private var databaseURL: URL
-
-    public init(databaseFileName: String) {
-        self.databaseName = databaseFileName
-
-        databaseURL = try! FileManager.default
-                .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-                .appendingPathComponent("\(databaseName).sqlite")
-
-        dbPool = try! DatabasePool(path: databaseURL.path)
+    public init(databaseFilePath: String) {
+        dbPool = try! DatabasePool(path: databaseFilePath)
 
         try? migrator.migrate(dbPool)
     }
 
     open var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
-
-        migrator.registerMigration("createFeeRates") { db in
-            try db.create(table: FeeRate.databaseTableName) { t in
-                t.column(FeeRate.Columns.primaryKey.name, .text).notNull()
-                t.column(FeeRate.Columns.lowPriority.name, .text).notNull()
-                t.column(FeeRate.Columns.mediumPriority.name, .text).notNull()
-                t.column(FeeRate.Columns.highPriority.name, .text).notNull()
-                t.column(FeeRate.Columns.date.name, .date).notNull()
-
-                t.primaryKey([FeeRate.Columns.primaryKey.name], onConflict: .replace)
-            }
-        }
 
         migrator.registerMigration("createBlockchainStates") { db in
             try db.create(table: BlockchainState.databaseTableName) { t in
@@ -83,10 +62,13 @@ open class GrdbStorage {
                 t.column(PublicKey.Columns.raw.name, .blob).notNull()
                 t.column(PublicKey.Columns.keyHash.name, .blob).notNull()
                 t.column(PublicKey.Columns.scriptHashForP2WPKH.name, .blob).notNull()
-                t.column(PublicKey.Columns.keyHashHex.name, .text).notNull()
 
                 t.primaryKey([PublicKey.Columns.path.name], onConflict: .replace)
             }
+
+            try db.create(index: "by\(PublicKey.Columns.raw.name)", on: PublicKey.databaseTableName, columns: [PublicKey.Columns.raw.name])
+            try db.create(index: "by\(PublicKey.Columns.keyHash.name)", on: PublicKey.databaseTableName, columns: [PublicKey.Columns.keyHash.name])
+            try db.create(index: "by\(PublicKey.Columns.scriptHashForP2WPKH.name)", on: PublicKey.databaseTableName, columns: [PublicKey.Columns.scriptHashForP2WPKH.name])
         }
 
         migrator.registerMigration("createBlocks") { db in
@@ -103,6 +85,7 @@ open class GrdbStorage {
 
                 t.primaryKey([Block.Columns.headerHash.name], onConflict: .abort)
             }
+
             try db.create(index: "by\(Block.Columns.height.name)", on: Block.databaseTableName, columns: [Block.Columns.height.name])
         }
 
@@ -135,7 +118,7 @@ open class GrdbStorage {
                 t.column(Input.Columns.address.name, .text)
                 t.column(Input.Columns.witnessData.name, .blob)
 
-                t.primaryKey([Input.Columns.previousOutputTxHash.name, Input.Columns.previousOutputIndex.name], onConflict: .replace)
+                t.primaryKey([Input.Columns.previousOutputTxHash.name, Input.Columns.previousOutputIndex.name], onConflict: .abort)
                 t.foreignKey([Input.Columns.transactionHash.name], references: Transaction.databaseTableName, columns: [Transaction.Columns.dataHash.name], onDelete: .cascade, onUpdate: .cascade, deferred: true)
             }
         }
@@ -151,60 +134,18 @@ open class GrdbStorage {
                 t.column(Output.Columns.keyHash.name, .blob)
                 t.column(Output.Columns.address.name, .text)
 
-                t.primaryKey([Output.Columns.transactionHash.name, Output.Columns.index.name], onConflict: .replace)
+                t.primaryKey([Output.Columns.transactionHash.name, Output.Columns.index.name], onConflict: .abort)
                 t.foreignKey([Output.Columns.transactionHash.name], references: Transaction.databaseTableName, columns: [Transaction.Columns.dataHash.name], onDelete: .cascade, onUpdate: .cascade, deferred: true)
                 t.foreignKey([Output.Columns.publicKeyPath.name], references: PublicKey.databaseTableName, columns: [PublicKey.Columns.path.name], onDelete: .setNull, onUpdate: .setNull)
-            }
-        }
-
-        migrator.registerMigration("changeTypesFeeRates") { db in
-            try db.drop(table: FeeRate.databaseTableName)
-            try db.create(table: FeeRate.databaseTableName) { t in
-                t.column(FeeRate.Columns.primaryKey.name, .text).notNull()
-                t.column(FeeRate.Columns.lowPriority.name, .integer).notNull()
-                t.column(FeeRate.Columns.mediumPriority.name, .integer).notNull()
-                t.column(FeeRate.Columns.highPriority.name, .integer).notNull()
-                t.column(FeeRate.Columns.date.name, .date).notNull()
-
-                t.primaryKey([FeeRate.Columns.primaryKey.name], onConflict: .replace)
             }
         }
 
         return migrator
     }
 
-    open func clearGrdb() throws {
-        _ = try! dbPool.write { db in
-            try FeeRate.deleteAll(db)
-            try BlockchainState.deleteAll(db)
-            try PeerAddress.deleteAll(db)
-            try BlockHash.deleteAll(db)
-            try SentTransaction.deleteAll(db)
-            try Input.deleteAll(db)
-            try Output.deleteAll(db)
-            try Transaction.deleteAll(db)
-            try PublicKey.deleteAll(db)
-            try Block.deleteAll(db)
-        }
-    }
-
 }
 
 extension GrdbStorage: IStorage {
-    // FeeRate
-
-    public var feeRate: FeeRate? {
-        return try! dbPool.read { db in
-            try FeeRate.fetchOne(db)
-        }
-    }
-
-    public func set(feeRate: FeeRate) {
-        _ = try! dbPool.write { db in
-            try feeRate.insert(db)
-        }
-    }
-
     // BlockchainState
 
     public var initialRestored: Bool? {
@@ -433,7 +374,7 @@ extension GrdbStorage: IStorage {
 
     public func unstaleAllBlocks() throws {
         _ = try! dbPool.write { db in
-            try db.execute("UPDATE \(Block.databaseTableName) SET stale = true WHERE stale = false")
+            try db.execute("UPDATE \(Block.databaseTableName) SET stale = ? WHERE stale = ?", arguments: [true, false])
         }
     }
 
@@ -542,6 +483,37 @@ extension GrdbStorage: IStorage {
         return results
     }
 
+    public func fullTransactionInfo(byHash hash: Data) -> FullTransactionForInfo? {
+        var transaction: TransactionWithBlock? = nil
+
+        try! dbPool.read { db in
+            let transactionC = Transaction.Columns.allCases.count
+
+            let adapter = ScopeAdapter([
+                "transaction": RangeRowAdapter(0..<transactionC)
+            ])
+
+            let sql = """
+                      SELECT transactions.*, blocks.height as blockHeight
+                      FROM transactions
+                      LEFT JOIN blocks ON transactions.blockHash = blocks.headerHash
+                      WHERE transactions.dataHash = \("x'" + hash.hex + "'")                    
+                      """
+
+            let rows = try Row.fetchCursor(db, sql, adapter: adapter)
+
+            if let row = try rows.next() {
+                transaction = TransactionWithBlock(transaction: row["transaction"], blockHeight: row["blockHeight"])
+            }
+
+        }
+
+        guard let transactionWithBlock = transaction else {
+            return nil
+        }
+        return fullInfo(forTransactions: [transactionWithBlock]).first
+    }
+
     public func fullTransactionsInfo(fromTimestamp: Int?, fromOrder: Int?, limit: Int?) -> [FullTransactionForInfo] {
         var transactions = [TransactionWithBlock]()
 
@@ -559,7 +531,13 @@ extension GrdbStorage: IStorage {
                       """
             
             if let fromTimestamp = fromTimestamp, let fromOrder = fromOrder {
-                sql = sql + " " + "WHERE transactions.timestamp < \(fromTimestamp) OR (transactions.timestamp = \(fromTimestamp) AND transactions.\"order\" < \(fromOrder))"
+                sql = sql + " WHERE transactions.timestamp < \(fromTimestamp) OR (transactions.timestamp == \(fromTimestamp) AND transactions.\"order\" < \(fromOrder))"
+            }
+
+            sql += " ORDER BY transactions.timestamp DESC, transactions.\"order\" DESC"
+
+            if let limit = limit {
+                sql += " LIMIT \(limit)"
             }
             
             sql = sql + " " + """
@@ -648,15 +626,15 @@ extension GrdbStorage: IStorage {
         }
     }
 
-    public func inputs(ofTransaction transaction: Transaction) -> [Input] {
+    public func inputs(transactionHash: Data) -> [Input] {
         return try! dbPool.read { db in
-            try Input.filter(Input.Columns.transactionHash == transaction.dataHash).fetchAll(db)
+            try Input.filter(Input.Columns.transactionHash == transactionHash).fetchAll(db)
         }
     }
 
-    public func outputs(ofTransaction transaction: Transaction) -> [Output] {
+    public func outputs(transactionHash: Data) -> [Output] {
         return try! dbPool.read { db in
-            try Output.filter(Output.Columns.transactionHash == transaction.dataHash).fetchAll(db)
+            try Output.filter(Output.Columns.transactionHash == transactionHash).fetchAll(db)
         }
     }
 
@@ -693,12 +671,6 @@ extension GrdbStorage: IStorage {
     public func publicKeys() -> [PublicKey] {
         return try! dbPool.read { db in
             try PublicKey.fetchAll(db)
-        }
-    }
-
-    public func publicKey(byPath path: String) -> PublicKey? {
-        return try! dbPool.read { db in
-            try PublicKey.filter(PublicKey.Columns.path == path).fetchOne(db)
         }
     }
 
@@ -744,12 +716,6 @@ extension GrdbStorage: IStorage {
 
             return publicKeys
         }
-    }
-
-    // Clear
-
-    public func clear() throws {
-        try clearGrdb()
     }
 
 }

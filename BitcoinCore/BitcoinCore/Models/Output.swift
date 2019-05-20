@@ -52,6 +52,7 @@ public class Output: Record {
     public var keyHash: Data? = nil
     public var address: String? = nil
 
+
     init(withValue value: Int, index: Int, lockingScript script: Data, type: ScriptType = .unknown, address: String? = nil, keyHash: Data? = nil, publicKey: PublicKey? = nil) {
         self.value = value
         self.lockingScript = script

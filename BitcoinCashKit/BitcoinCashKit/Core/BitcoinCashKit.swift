@@ -9,20 +9,21 @@ public class BitcoinCashKit: AbstractKit {
     private static let targetSpacing = 10 * 60                                  // Time to mining one block ( 10 min. same as Bitcoin )
     private static let maxTargetBits = 0x1d00ffff                               // Initially and max. target difficulty for blocks
 
+    public static func clear() throws {
+        try DirectoryHelper.removeDirectory("BitcoinCashKit")
+    }
+
     public enum NetworkType { case mainNet, testNet }
 
     public weak var delegate: BitcoinCoreDelegate? {
         didSet {
-            guard let delegate = delegate else {
-                return
-            }
-            bitcoinCore.add(delegate: delegate)
+            bitcoinCore.delegate = delegate
         }
     }
 
     private let storage: IBitcoinCashStorage
 
-    public init(withWords words: [String], walletId: String, networkType: NetworkType = .mainNet, minLogLevel: Logger.Level = .verbose) throws {
+    public init(withWords words: [String], walletId: String, newWallet: Bool = false, networkType: NetworkType = .mainNet, minLogLevel: Logger.Level = .verbose) throws {
         let network: INetwork
         let initialSyncApiUrl: String
 
@@ -37,26 +38,24 @@ public class BitcoinCashKit: AbstractKit {
                 initialSyncApiUrl = "http://bch-testnet.horizontalsystems.xyz/apg"
                 validScheme = "bchtest"
         }
+        let initialSyncApi = BCoinApi(url: initialSyncApiUrl)
 
-        let databaseFileName = "\(walletId)-bitcoincash-\(networkType)"
-
-        let storage = BitcoinCashGrdbStorage(databaseFileName: databaseFileName)
+        let databaseFilePath = try DirectoryHelper.directoryURL(for: "BitcoinCashKit").appendingPathComponent("\(walletId)-\(networkType)").path
+        let storage = BitcoinCashGrdbStorage(databaseFilePath: databaseFilePath)
         self.storage = storage
 
         let paymentAddressParser = PaymentAddressParser(validScheme: validScheme, removeScheme: false)
         let addressSelector = BitcoinCashAddressSelector()
-        let apiFeeRateResource = "BCH"
 
-        let bitcoinCore = try BitcoinCoreBuilder()
+        let bitcoinCore = try BitcoinCoreBuilder(minLogLevel: minLogLevel)
                 .set(network: network)
-                .set(initialSyncApiUrl: initialSyncApiUrl)
+                .set(initialSyncApi: initialSyncApi)
                 .set(words: words)
                 .set(paymentAddressParser: paymentAddressParser)
                 .set(addressSelector: addressSelector)
-                .set(feeRateApiResource: apiFeeRateResource)
                 .set(walletId: walletId)
                 .set(peerSize: 4)
-                .set(newWallet: false)
+                .set(newWallet: newWallet)
                 .set(storage: storage)
                 .build()
 

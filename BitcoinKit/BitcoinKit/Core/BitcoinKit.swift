@@ -5,23 +5,24 @@ import HSCryptoKit
 import RxSwift
 
 public class BitcoinKit: AbstractKit {
-    public enum NetworkType { case mainNet, testNet, regTest }
-
-    public weak var delegate: BitcoinCoreDelegate? {
-        didSet {
-            guard let delegate = delegate else {
-                return
-            }
-            bitcoinCore.add(delegate: delegate)
-        }
+    public static func clear() throws {
+        try DirectoryHelper.removeDirectory("BitcoinKit")
     }
+
+    public enum NetworkType { case mainNet, testNet, regTest }
 
     private let storage: IStorage
     private let bech32AddressConverter: IAddressConverter
 
-    public init(withWords words: [String], walletId: String, networkType: NetworkType = .mainNet, minLogLevel: Logger.Level = .verbose) throws {
+    public weak var delegate: BitcoinCoreDelegate? {
+        didSet {
+            bitcoinCore.delegate = delegate
+        }
+    }
+
+    public init(withWords words: [String], walletId: String, newWallet: Bool = false, networkType: NetworkType = .mainNet, minLogLevel: Logger.Level = .verbose) throws {
         let network: INetwork
-        var initialSyncApiUrl: String? = nil
+        let initialSyncApiUrl: String
 
         switch networkType {
             case .mainNet:
@@ -30,28 +31,28 @@ public class BitcoinKit: AbstractKit {
             case .testNet:
                 network = TestNet()
                 initialSyncApiUrl = "http://btc-testnet.horizontalsystems.xyz/apg"
-            case .regTest: network = RegTest()
+            case .regTest:
+                network = RegTest()
+                initialSyncApiUrl = ""
         }
+        let initialSyncApi = BCoinApi(url: initialSyncApiUrl)
 
-        let databaseFileName = "\(walletId)-bitcoin-\(networkType)"
-
-        let storage = GrdbStorage(databaseFileName: databaseFileName)
+        let databaseFilePath = try DirectoryHelper.directoryURL(for: "BitcoinKit").appendingPathComponent("\(walletId)-\(networkType)").path
+        let storage = GrdbStorage(databaseFilePath: databaseFilePath)
         self.storage = storage
 
         let paymentAddressParser = PaymentAddressParser(validScheme: "bitcoin", removeScheme: true)
         let addressSelector = BitcoinAddressSelector()
-        let apiFeeRateResource = "BTC"
 
-        let bitcoinCore = try BitcoinCoreBuilder()
+        let bitcoinCore = try BitcoinCoreBuilder(minLogLevel: minLogLevel)
                 .set(network: network)
-                .set(initialSyncApiUrl: initialSyncApiUrl)
+                .set(initialSyncApi: initialSyncApi)
                 .set(words: words)
                 .set(paymentAddressParser: paymentAddressParser)
                 .set(addressSelector: addressSelector)
-                .set(feeRateApiResource: apiFeeRateResource)
                 .set(walletId: walletId)
                 .set(peerSize: 10)
-                .set(newWallet: false)
+                .set(newWallet: newWallet)
                 .set(storage: storage)
                 .build()
 

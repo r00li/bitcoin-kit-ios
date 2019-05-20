@@ -12,21 +12,18 @@ project 'BitcoinCashKit/BitcoinCashKit'
 project 'DashKit/DashKit'
 
 def internal_pods
-    pod 'HSCryptoKit', '~> 1.0'
-    pod 'HSHDWalletKit', :git => 'https://github.com/r00li/hd-wallet-kit-ios.git', :branch => 'master'
+  pod 'HSCryptoKit', git: 'https://github.com/horizontalsystems/crypto-kit-ios'
+  pod 'HSHDWalletKit', :git => 'https://github.com/r00li/hd-wallet-kit-ios.git', :branch => 'master'
 end
 
 def kit_pods
-    internal_pods
-    
-    pod 'Alamofire', '~> 4.0'
-    pod 'ObjectMapper', '~> 3.0'
-    
-    pod 'RxSwift', '~> 4.0'
-    
-    pod 'BigInt', '~> 3.0'
-    
-    pod 'GRDB.swift', '~> 3.0'
+  internal_pods
+
+  pod 'Alamofire', '~> 4.0'
+  pod 'ObjectMapper', '~> 3.0'
+  pod 'RxSwift', '~> 4.0'
+  pod 'BigInt', '~> 4.0'
+  pod 'GRDB.swift', '~> 3.0'
 end
 
 target :BitcoinCore do
@@ -47,15 +44,13 @@ end
 target :DashKit do
     project 'DashKit/DashKit'
     kit_pods
-    
-    pod 'HSCryptoX11', git: 'https://github.com/horizontalsystems/crypto-x11-ios'
+    pod 'CryptoX11.swift', git: 'https://github.com/horizontalsystems/crypto-x11-ios'
 end
 
 target :Demo do
     project 'Demo/Demo'
     kit_pods
-    
-    pod 'HSCryptoX11', git: 'https://github.com/horizontalsystems/crypto-x11-ios'
+    pod 'CryptoX11.swift', git: 'https://github.com/horizontalsystems/crypto-x11-ios'
 end
 
 def test_pods
@@ -91,6 +86,5 @@ target :DashKitTests do
     
     internal_pods
     test_pods
-    
-    pod 'HSCryptoX11', git: 'https://github.com/horizontalsystems/crypto-x11-ios'
+    pod 'CryptoX11.swift', git: 'https://github.com/horizontalsystems/crypto-x11-ios'
 end

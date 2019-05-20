@@ -58,9 +58,9 @@ extension BitcoinCore.KitState: Equatable {
 
 }
 
-extension SelectorError: Equatable {
+extension BitcoinCoreErrors.UnspentOutputSelection: Equatable {
 
-    public static func ==(lhs: SelectorError, rhs: SelectorError) -> Bool {
+    public static func ==(lhs: BitcoinCoreErrors.UnspentOutputSelection, rhs: BitcoinCoreErrors.UnspentOutputSelection) -> Bool {
         switch (lhs, rhs) {
         case (.wrongValue, .wrongValue): return true
         case (.emptyOutputs, .emptyOutputs): return true
@@ -120,6 +120,14 @@ extension Transaction: Equatable {
 
 }
 
+extension Input: Equatable {
+
+    public static func ==(lhs: Input, rhs: Input) -> Bool {
+        return lhs.previousOutputIndex == rhs.previousOutputIndex && lhs.previousOutputTxHash == rhs.previousOutputTxHash
+    }
+
+}
+
 extension BlockHeader: Equatable {
 
     public static func ==(lhs: BlockHeader, rhs: BlockHeader) -> Bool {
@@ -132,6 +140,14 @@ extension FullTransaction: Equatable {
 
     public static func ==(lhs: FullTransaction, rhs: FullTransaction) -> Bool {
         return TransactionSerializer.serialize(transaction: lhs) == TransactionSerializer.serialize(transaction: rhs)
+    }
+
+}
+
+extension UnspentOutput: Equatable {
+
+    public static func ==(lhs: UnspentOutput, rhs: UnspentOutput) -> Bool {
+        return lhs.output.value == rhs.output.value
     }
 
 }

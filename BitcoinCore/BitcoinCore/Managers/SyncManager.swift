@@ -1,26 +1,34 @@
 import RxSwift
 
 class SyncManager {
-    private let feeRateSyncPeriod: TimeInterval = 3 * 60
-
-    private let disposeBag = DisposeBag()
+    private var disposeBag = DisposeBag()
 
     private let reachabilityManager: IReachabilityManager
-    private let feeRateSyncer: IFeeRateSyncer
     private let initialSyncer: IInitialSyncer
     private let peerGroup: IPeerGroup
 
-    init(reachabilityManager: IReachabilityManager, feeRateSyncer: IFeeRateSyncer, initialSyncer: IInitialSyncer, peerGroup: IPeerGroup) {
+    init(reachabilityManager: IReachabilityManager, initialSyncer: IInitialSyncer, peerGroup: IPeerGroup) {
         self.reachabilityManager = reachabilityManager
-        self.feeRateSyncer = feeRateSyncer
         self.initialSyncer = initialSyncer
         self.peerGroup = peerGroup
     }
 
-    private func syncFeeRate() {
+    private func startSync() {
         if reachabilityManager.isReachable {
-            feeRateSyncer.sync()
             initialSyncer.sync()
+        }
+    }
+
+    private func stopSync() {
+        initialSyncer.stop()
+        peerGroup.stop()
+    }
+
+    private func onReachabilityChanged() {
+        if reachabilityManager.isReachable {
+            startSync()
+        } else {
+            stopSync()
         }
     }
 
@@ -32,22 +40,16 @@ extension SyncManager: ISyncManager {
         reachabilityManager.reachabilitySignal
                 .observeOn(ConcurrentDispatchQueueScheduler(qos: .background))
                 .subscribe(onNext: { [weak self] in
-                    self?.syncFeeRate()
+                    self?.onReachabilityChanged()
                 })
                 .disposed(by: disposeBag)
-
-        Observable<Int>.timer(0, period: feeRateSyncPeriod, scheduler: ConcurrentDispatchQueueScheduler(qos: .background))
-                .observeOn(ConcurrentDispatchQueueScheduler(qos: .background))
-                .subscribe(onNext: { [weak self] _ in
-                    self?.syncFeeRate()
-                }).disposed(by: disposeBag)
 
         initialSyncer.sync()
     }
 
     func stop() {
-        initialSyncer.stop()
-        peerGroup.stop()
+        disposeBag = DisposeBag()
+        stopSync()
     }
 
 }

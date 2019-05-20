@@ -1,9 +1,17 @@
 import Foundation
 import RxSwift
 
-class PeerGroup {
-    private var disposable: Disposable?
+public enum PeerGroupEvent {
+    case onStart
+    case onStop
+    case onPeerCreate(peer: IPeer)
+    case onPeerConnect(peer: IPeer)
+    case onPeerDisconnect(peer: IPeer, error: Error?)
+    case onPeerReady(peer: IPeer)
+    case onPeerBusy(peer: IPeer)
+}
 
+class PeerGroup {
     private let factory: IFactory
 
     private let reachabilityManager: IReachabilityManager
@@ -18,23 +26,22 @@ class PeerGroup {
 
     private let peersQueue: DispatchQueue
     private let inventoryQueue: DispatchQueue
-
-    var blockSyncer: IBlockSyncer?
-    var transactionSyncer: ITransactionSyncer?
+    private let subjectQueue: DispatchQueue
 
     private let logger: Logger?
 
-    var inventoryItemsHandler: IInventoryItemsHandler? = nil
-    var peerTaskHandler: IPeerTaskHandler? = nil
+    weak var inventoryItemsHandler: IInventoryItemsHandler? = nil
+    weak var peerTaskHandler: IPeerTaskHandler? = nil
 
-    var taskQueue = SynchronizedArray<PeerTask>()
-
-    private var peerGroupListeners = [IPeerGroupListener]()
+    private let subject = PublishSubject<PeerGroupEvent>()
+    let observable: Observable<PeerGroupEvent>
 
     init(factory: IFactory, reachabilityManager: IReachabilityManager,
          peerAddressManager: IPeerAddressManager, peerCount: Int = 10, peerManager: IPeerManager,
          peersQueue: DispatchQueue = DispatchQueue(label: "PeerGroup Local Queue", qos: .userInitiated),
          inventoryQueue: DispatchQueue = DispatchQueue(label: "PeerGroup Inventory Queue", qos: .background),
+         subjectQueue: DispatchQueue = DispatchQueue(label: "PeerGroup Subject Queue", qos: .background),
+         scheduler: SchedulerType = SerialDispatchQueueScheduler(qos: .background),
          logger: Logger? = nil) {
         self.factory = factory
 
@@ -45,18 +52,12 @@ class PeerGroup {
 
         self.peersQueue = peersQueue
         self.inventoryQueue = inventoryQueue
+        self.subjectQueue = subjectQueue
 
         self.logger = logger
+        self.observable = subject.asObservable().observeOn(scheduler)
 
         self.peerAddressManager.delegate = self
-    }
-
-    deinit {
-        disposable?.dispose()
-    }
-
-    func add(listener: IPeerGroupListener) {
-        peerGroupListeners.append(listener)
     }
 
     private func connectPeersIfRequired() {
@@ -69,8 +70,7 @@ class PeerGroup {
                 if let host = self.peerAddressManager.ip {
                     let peer = self.factory.peer(withHost: host, logger: self.logger)
                     peer.delegate = self
-                    self.peerGroupListeners.forEach { $0.onPeerCreate(peer: peer) }
-
+                    self.onNext(.onPeerCreate(peer: peer))
                     self.peerManager.add(peer: peer)
                     peer.connect()
                 } else {
@@ -80,78 +80,36 @@ class PeerGroup {
         }
     }
 
-    private func _start() {
-        guard started, _started == false else {
-            return
+    private func onNext(_ event: PeerGroupEvent) {
+        subjectQueue.async {
+            self.subject.onNext(event)
         }
-
-        _started = true
-
-        peerGroupListeners.forEach { $0.onStart() } // potential broke order of call functions
-        connectPeersIfRequired()
-    }
-
-    private func _stop() {
-        _started = false
-
-        peerManager.disconnectAll()
-        peerGroupListeners.forEach { $0.onStop() }
     }
 
 }
 
 extension PeerGroup: IPeerGroup {
 
-    func add(peerGroupListener: IPeerGroupListener) {
-        peerGroupListeners.append(peerGroupListener)
-    }
-
-    var someReadyPeers: [IPeer] {
-        return peerManager.someReadyPeers()
-    }
-
     func start() {
-        guard started == false else {
+        guard started == false, reachabilityManager.isReachable else {
             return
         }
 
         started = true
 
-        // Subscribe to ReachabilityManager
-        disposable = reachabilityManager.reachabilitySignal.subscribe(onNext: { [weak self] in
-            self?.onChangeConnection()
-        })
-
-        if reachabilityManager.isReachable {
-            _start()
-        }
-    }
-
-    private func onChangeConnection() {
-        if reachabilityManager.isReachable {
-            _start()
-        } else {
-            _stop()
-        }
+        onNext(.onStart)
+        connectPeersIfRequired()
     }
 
     func stop() {
         started = false
 
-        // Unsubscribe to ReachabilityManager
-        disposable?.dispose()
-
-        _stop()
+        peerManager.disconnectAll()
+        onNext(.onStop)
     }
 
-    func checkPeersSynced() throws {
-        guard peerManager.connected().count > 0 else {
-            throw BitcoinCoreErrors.PeerGroup.noConnectedPeers
-        }
-
-        guard peerManager.halfIsSynced() else {
-            throw BitcoinCoreErrors.PeerGroup.peersNotSynced
-        }
+    func isReady(peer: IPeer) -> Bool {
+        return peer.ready
     }
 
 }
@@ -159,22 +117,22 @@ extension PeerGroup: IPeerGroup {
 extension PeerGroup: PeerDelegate {
 
     func peerReady(_ peer: IPeer) {
-        peersQueue.async {
-            self.peerGroupListeners.forEach { $0.onPeerReady(peer: peer) }
+        onNext(.onPeerReady(peer: peer))
+    }
 
-            // todo check if peer is not syncPeer
-            if let task = self.taskQueue.first {
-                peer.add(task: task)
-                self.taskQueue.remove(at: 0)
-            }
-        }
+    func peerBusy(_ peer: IPeer) {
+        onNext(.onPeerBusy(peer: peer))
     }
 
     func peerDidConnect(_ peer: IPeer) {
-        peerGroupListeners.forEach { $0.onPeerConnect(peer: peer) }
+        onNext(.onPeerConnect(peer: peer))
     }
 
     func peerDidDisconnect(_ peer: IPeer, withError error: Error?) {
+        peersQueue.async {
+            self.peerManager.peerDisconnected(peer: peer)
+        }
+
         if let error = error {
             logger?.warning("Peer \(peer.logName)(\(peer.host)) disconnected. Network reachable: \(reachabilityManager.isReachable). Error: \(error)")
         }
@@ -185,12 +143,7 @@ extension PeerGroup: PeerDelegate {
             peerAddressManager.markSuccess(ip: peer.host)
         }
 
-        peersQueue.async {
-            self.peerManager.peerDisconnected(peer: peer)
-
-            self.peerGroupListeners.forEach { $0.onPeerDisconnect(peer: peer, error: error) }
-        }
-
+        onNext(.onPeerDisconnect(peer: peer, error: error))
         connectPeersIfRequired()
     }
 
@@ -207,15 +160,6 @@ extension PeerGroup: PeerDelegate {
     func peer(_ peer: IPeer, didReceiveInventoryItems items: [InventoryItem]) {
         inventoryQueue.async {
             self.inventoryItemsHandler?.handleInventoryItems(peer: peer, inventoryItems: items)
-        }
-    }
-
-    func addTask(peerTask: PeerTask) {
-        // todo find better solution
-        if let peer = peerManager.someReadyPeers().first {
-            peer.add(task: peerTask)
-        } else {
-            taskQueue.append(peerTask)
         }
     }
 
