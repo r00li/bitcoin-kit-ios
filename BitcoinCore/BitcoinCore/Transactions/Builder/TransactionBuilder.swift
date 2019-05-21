@@ -5,16 +5,16 @@ class TransactionBuilder {
         case noChangeAddress
         case feeMoreThanValue
     }
-
+    
     private let unspentOutputSelector: IUnspentOutputSelector
     private let unspentOutputProvider: IUnspentOutputProvider
     private let addressManager: IAddressManager
     private let addressConverter: IAddressConverter
     private let inputSigner: IInputSigner
     private let factory: IFactory
-
+    
     var scriptBuilder: IScriptBuilder
-
+    
     init(unspentOutputSelector: IUnspentOutputSelector, unspentOutputProvider: IUnspentOutputProvider, addressManager: IAddressManager, addressConverter: IAddressConverter, inputSigner: IInputSigner, scriptBuilder: IScriptBuilder, factory: IFactory) {
         self.unspentOutputSelector = unspentOutputSelector
         self.unspentOutputProvider = unspentOutputProvider
@@ -24,7 +24,7 @@ class TransactionBuilder {
         self.scriptBuilder = scriptBuilder
         self.factory = factory
     }
-
+    
     private func input(fromUnspentOutput unspentOutput: UnspentOutput) throws -> InputToSign {
         if unspentOutput.output.scriptType == .p2wpkh {
             // todo: refactoring version byte!
@@ -32,20 +32,20 @@ class TransactionBuilder {
             // version (current only 0), but for sign we need only public kee hash
             unspentOutput.output.keyHash?.removeFirst(2)
         }
-
+        
         return factory.inputToSign(withPreviousOutput: unspentOutput, script: Data(), sequence: 0xFFFFFFFF)
     }
-
+    
     private func output(withIndex index: Int, address: Address, pubKey: PublicKey? = nil, value: Int) throws -> Output {
         let script = try scriptBuilder.lockingScript(for: address)
         let output = factory.output(withValue: value, index: index, lockingScript: script, type: address.scriptType, address: address.stringValue, keyHash: address.keyHash, publicKey: pubKey)
         return output
     }
-
+    
 }
 
 extension TransactionBuilder: ITransactionBuilder {
-
+    
     // :fee method returns the fee for the given amount
     // If address given and it's valid, it returns the actual fee
     // Otherwise, it returns the estimated fee
@@ -61,51 +61,51 @@ extension TransactionBuilder: ITransactionBuilder {
             return selectedOutputsInfo.fee
         }
     }
-
+    
     func buildTransaction(value: Int, feeRate: Int, senderPay: Bool, toAddress: String) throws -> FullTransaction {
         guard let changePubKey = try? addressManager.changePublicKey() else {
             throw BuildError.noChangeAddress
         }
-
+        
         let changeScriptType = ScriptType.p2pkh
         let address = try addressConverter.convert(address: toAddress)
         let selectedOutputsInfo = try unspentOutputSelector.select(value: value, feeRate: feeRate, outputScriptType: address.scriptType, changeType: changeScriptType, senderPay: senderPay)
-
+        
         if !senderPay {
             guard selectedOutputsInfo.fee < value else {
                 throw BuildError.feeMoreThanValue
             }
         }
-
+        
         var inputsToSign = [InputToSign]()
         var outputs = [Output]()
-
+        
         // Add inputs without unlocking scripts
         for output in selectedOutputsInfo.unspentOutputs {
             inputsToSign.append(try input(fromUnspentOutput: output))
         }
-
+        
         // Calculate fee
         let receivedValue = senderPay ? value : value - selectedOutputsInfo.fee
         let sentValue = senderPay ? value + selectedOutputsInfo.fee : value
-
+        
         // Add :to output
         outputs.append(try output(withIndex: 0, address: address, value: receivedValue))
-
+        
         // Add :change output if needed
         if selectedOutputsInfo.addChangeOutput {
             let changeAddress = try addressConverter.convert(keyHash: changePubKey.keyHash, type: changeScriptType)
             outputs.append(try output(withIndex: 1, address: changeAddress, value: selectedOutputsInfo.totalValue - sentValue))
         }
-
+        
         // Build transaction
         let transaction = factory.transaction(version: 1, lockTime: 0)
-
+        
         // Sign inputs
         for i in 0..<inputsToSign.count {
             let previousUnspentOutput = selectedOutputsInfo.unspentOutputs[i]
             let sigScriptData = try inputSigner.sigScriptData(transaction: transaction, inputsToSign: inputsToSign, outputs: outputs, index: i)
-
+            
             var params = [Data]()
             switch previousUnspentOutput.output.scriptType {
             case .p2wpkh:
@@ -117,14 +117,14 @@ extension TransactionBuilder: ITransactionBuilder {
                 params.append(OpCode.scriptWPKH(previousUnspentOutput.publicKey.keyHash))
             default: params.append(contentsOf: sigScriptData)
             }
-
+            
             inputsToSign[i].input.signatureScript = params.reduce(Data()) { $0 + OpCode.push($1) }
         }
-
+        
         transaction.status = .new
         transaction.isMine = true
         transaction.isOutgoing = true
-
+        
         return FullTransaction(header: transaction, inputs: inputsToSign.map{ $0.input }, outputs: outputs)
     }
     
@@ -144,7 +144,7 @@ extension TransactionBuilder: ITransactionBuilder {
         let changeScriptType = ScriptType.p2pkh
         let address = try addressConverter.convert(address: toAddress)
         let selectedOutputsInfo = try unspentOutputSelector.select(value: value, feeRate: feeRate, outputScriptType: address.scriptType, changeType: changeScriptType, senderPay: senderPay)
-
+        
         if !senderPay {
             guard selectedOutputsInfo.fee < value else {
                 throw BuildError.feeMoreThanValue
@@ -166,10 +166,14 @@ extension TransactionBuilder: ITransactionBuilder {
         // Add :to output
         outputs.append(try output(withIndex: 0, address: address, value: receivedValue))
         
+        var changeAddresses: [String: PublicKey] = [:]
+        
         // Add :change output if needed
         if selectedOutputsInfo.addChangeOutput {
             let changeAddress = try addressConverter.convert(keyHash: changePubKey.keyHash, type: changeScriptType)
             outputs.append(try output(withIndex: 1, address: changeAddress, value: selectedOutputsInfo.totalValue - sentValue))
+            
+            changeAddresses[changeAddress.stringValue] = changePubKey
         }
         
         // Build transaction
@@ -212,7 +216,7 @@ extension TransactionBuilder: ITransactionBuilder {
         transaction.isOutgoing = true
         
         let fullTx = FullTransaction(header: transaction, inputs: inputsToSign.map{ $0.input }, outputs: outputs)
-        return (fullTx, preparedInputs, publicKeys)
+        return (fullTx, preparedInputs, publicKeys, changeAddresses)
     }
     
     func completeProcessingColdTransaction(transaction: FullTransaction) throws -> FullTransaction {
@@ -247,5 +251,5 @@ extension TransactionBuilder: ITransactionBuilder {
     
     // MARK: - End Kamino additions
     // --------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+    
 }

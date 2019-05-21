@@ -150,7 +150,7 @@ extension BitcoinCore {
     // KAMINO MOD:
     //--------------------------------------------------------------------------------------------------------------------------------------------------------
     
-    public typealias NonSignedTransaction = (transaction: FullTransaction, inputHashes: [Data], inputPublicKeys: [PublicKey])
+    public typealias NonSignedTransaction = (transaction: FullTransaction, inputHashes: [Data], inputPublicKeys: [PublicKey], changeAddresses: [String:PublicKey])
     
     public func transaction(fromHash: String?) -> FullTransaction? {
         guard let fromHash = fromHash else {
@@ -158,8 +158,8 @@ extension BitcoinCore {
         }
         
         if let fromHashData = Data(hex: fromHash), let fromTransaction = self.storage.transaction(byHash: Data(fromHashData.reversed())) {
-            let inputs = self.storage.inputs(transactionHash: fromHashData)
-            let outputs = self.storage.outputs(transactionHash: fromHashData)
+            let inputs = self.storage.inputs(transactionHash: Data(fromHashData.reversed()))
+            let outputs = self.storage.outputs(transactionHash: Data(fromHashData.reversed()))
             
             return FullTransaction(header: fromTransaction, inputs: inputs, outputs: outputs)
         }
