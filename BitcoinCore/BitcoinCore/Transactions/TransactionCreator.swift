@@ -3,9 +3,9 @@ class TransactionCreator {
         case transactionAlreadyExists
     }
 
-    private let transactionBuilder: ITransactionBuilder
-    private let transactionProcessor: ITransactionProcessor
-    private let transactionSender: ITransactionSender
+    let transactionBuilder: ITransactionBuilder
+    let transactionProcessor: ITransactionProcessor
+    let transactionSender: ITransactionSender
 
     init(transactionBuilder: ITransactionBuilder, transactionProcessor: ITransactionProcessor, transactionSender: ITransactionSender) {
         self.transactionBuilder = transactionBuilder

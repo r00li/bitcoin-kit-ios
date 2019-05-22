@@ -170,25 +170,20 @@ extension BitcoinCore {
     public func createColdWalletTransaction(to address: String, value: Int, feeRate: Int) throws -> NonSignedTransaction {
         // Modified send function that normally calls many methods. This removes the unecessary middle steps
         
-        // TODO: Find a suitable replacement
-        //try peerGroup.checkPeersSynced()
-        
-        //let transaction = try transactionBuilder.buildTransaction(value: value, feeRate: transactionFee.medium, senderPay: true, toAddress: address)
+        try (transactionCreator as? TransactionCreator)?.transactionSender.verifyCanSend()
         let transaction = try transactionBuilder.buildColdTransaction(value: value, feeRate: feeRate, senderPay: true, toAddress: address)
-        print(transaction)
-        //return transaction
-        //try transactionProcessor.processCreated(transaction: transaction)
-        //try peerGroup.sendPendingTransactions()
         
         return transaction
     }
     
+    public func sendColdWalletTransaction(_ transaction: Data) throws {
+        let fullTransaction = TransactionSerializer.deserialize(data: transaction)
+        try (transactionCreator as? TransactionCreator)?.transactionProcessor.processCreated(transaction: fullTransaction)
+        try (transactionCreator as? TransactionCreator)?.transactionSender.send(pendingTransaction: fullTransaction)
+    }
+    
     // END KAMINO MOD:
     //--------------------------------------------------------------------------------------------------------------------------------------------------------
-    
-    public func sendColdWalletTransaction() {
-        
-    }
 
     public func validate(address: String) throws {
         _ = try addressConverter.convert(address: address)
