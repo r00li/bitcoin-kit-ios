@@ -10,6 +10,7 @@ public class BitcoinCoreBuilder {
     private var network: INetwork?
     private var paymentAddressParser: IPaymentAddressParser?
     private var addressSelector: IAddressSelector?
+    private var addressKeyHashConverter: IAddressKeyHashConverter?
     private var walletId: String?
     private var initialSyncApi: ISyncTransactionApi?
     private var logger: Logger
@@ -19,8 +20,9 @@ public class BitcoinCoreBuilder {
 
     // parameters with default values
     private var confirmationsThreshold = 6
-    private var newWallet = false
+    private var syncMode = BitcoinCore.SyncMode.api
     private var peerCount = 10
+    private var peerCountToConnect = 100
 
     private var storage: IStorage?
 
@@ -49,6 +51,11 @@ public class BitcoinCoreBuilder {
         return self
     }
 
+    public func set(addressKeyHashConverter: IAddressKeyHashConverter) -> BitcoinCoreBuilder {
+        self.addressKeyHashConverter = addressKeyHashConverter
+        return self
+    }
+
     public func set(walletId: String) -> BitcoinCoreBuilder {
         self.walletId = walletId
         return self
@@ -59,8 +66,8 @@ public class BitcoinCoreBuilder {
         return self
     }
 
-    public func set(newWallet: Bool) -> BitcoinCoreBuilder {
-        self.newWallet = newWallet
+    public func set(syncMode: BitcoinCore.SyncMode) -> BitcoinCoreBuilder {
+        self.syncMode = syncMode
         return self
     }
 
@@ -178,9 +185,9 @@ public class BitcoinCoreBuilder {
         let merkleBranch = MerkleBranch(hasher: doubleShaHasher)
         let merkleBlockValidator = MerkleBlockValidator(maxBlockSize: network.maxBlockSize, merkleBranch: merkleBranch)
 
-        let factory = Factory(network: network, networkMessageParser: networkMessageParser, networkMessageSerializer: networkMessageSerializer, merkleBlockValidator: merkleBlockValidator)
+        let factory = Factory(network: network, networkMessageParser: networkMessageParser, networkMessageSerializer: networkMessageSerializer)
 
-        let addressManager = AddressManager.instance(storage: storage, hdWallet: hdWallet, addressConverter: addressConverter)
+        let addressManager = AddressManager.instance(storage: storage, hdWallet: hdWallet, addressConverter: addressConverter, addressKeyHashConverter: addressKeyHashConverter)
 
         let myOutputsCache = OutputsCache.instance(storage: storage)
         let scriptConverter = ScriptConverter()
@@ -201,10 +208,6 @@ public class BitcoinCoreBuilder {
         let bloomFilterManager = BloomFilterManager(storage: storage, factory: factory)
 
         let peerManager = PeerManager()
-
-        let peerGroup = PeerGroup(factory: factory, reachabilityManager: reachabilityManager,
-                peerAddressManager: peerAddressManager, peerCount: peerCount, peerManager: peerManager, logger: logger)
-
         let unspentOutputSelector = UnspentOutputSelectorChain()
         let transactionSyncer = TransactionSyncer(storage: storage, processor: transactionProcessor, addressManager: addressManager, bloomFilterManager: bloomFilterManager)
         let mempoolTransactions = MempoolTransactions(transactionSyncer: transactionSyncer)
@@ -212,18 +215,21 @@ public class BitcoinCoreBuilder {
         let blockHashFetcher = BlockHashFetcher(addressSelector: addressSelector, apiManager: initialSyncApi, addressConverter: addressConverter, helper: BlockHashFetcherHelper())
         let blockDiscovery = BlockDiscoveryBatch(network: network, wallet: hdWallet, blockHashFetcher: blockHashFetcher, logger: logger)
 
-        let stateManager = StateManager(storage: storage, network: network, newWallet: newWallet)
+        let stateManager = StateManager(storage: storage, restoreFromApi: network.syncableFromApi && syncMode == BitcoinCore.SyncMode.api)
 
         let initialSyncer = InitialSyncer(storage: storage, listener: kitStateProvider, stateManager: stateManager, blockDiscovery: blockDiscovery, addressManager: addressManager, logger: logger)
 
-        let syncManager = SyncManager(reachabilityManager: reachabilityManager, initialSyncer: initialSyncer, peerGroup: peerGroup)
-
-        let bloomFilterLoader = BloomFilterLoader(bloomFilterManager: bloomFilterManager)
+        let bloomFilterLoader = BloomFilterLoader(bloomFilterManager: bloomFilterManager, peerManager: peerManager)
 
         let blockValidatorChain = BlockValidatorChain(proofOfWorkValidator: ProofOfWorkValidator(difficultyEncoder: DifficultyEncoder()))
         let blockchain = Blockchain(storage: storage, blockValidator: blockValidatorChain, factory: factory, listener: dataProvider)
-        let blockSyncer = BlockSyncer.instance(storage: storage, network: network, factory: factory, listener: kitStateProvider, transactionProcessor: transactionProcessor, blockchain: blockchain, addressManager: addressManager, bloomFilterManager: bloomFilterManager, logger: logger)
-        let initialBlockDownload = InitialBlockDownload(blockSyncer: blockSyncer, peerManager: peerManager, syncStateListener: kitStateProvider, logger: logger)
+        let checkpointBlock = syncMode == .full ? network.bip44CheckpointBlock : network.lastCheckpointBlock
+        let blockSyncer = BlockSyncer.instance(storage: storage, checkpointBlock: checkpointBlock, factory: factory, listener: kitStateProvider, transactionProcessor: transactionProcessor, blockchain: blockchain, addressManager: addressManager, bloomFilterManager: bloomFilterManager, logger: logger)
+        let initialBlockDownload = InitialBlockDownload(blockSyncer: blockSyncer, peerManager: peerManager, merkleBlockValidator: merkleBlockValidator, syncStateListener: kitStateProvider, logger: logger)
+
+        let peerGroup = PeerGroup(factory: factory, reachabilityManager: reachabilityManager,
+                peerAddressManager: peerAddressManager, peerCount: peerCount, localDownloadedBestBlockHeight: blockSyncer.localDownloadedBestBlockHeight,
+                peerManager: peerManager, logger: logger)
         let syncedReadyPeerManager = SyncedReadyPeerManager(peerGroup: peerGroup, initialBlockDownload: initialBlockDownload)
 
         let inputSigner = InputSigner(hdWallet: hdWallet, network: network)
@@ -232,6 +238,7 @@ public class BitcoinCoreBuilder {
         let transactionSender = TransactionSender(transactionSyncer: transactionSyncer, peerManager: peerManager, initialBlockDownload: initialBlockDownload, syncedReadyPeerManager: syncedReadyPeerManager, logger: logger)
         let transactionCreator = TransactionCreator(transactionBuilder: transactionBuilder, transactionProcessor: transactionProcessor, transactionSender: transactionSender)
 
+        let syncManager = SyncManager(reachabilityManager: reachabilityManager, initialSyncer: initialSyncer, peerGroup: peerGroup)
 
         let bitcoinCore = BitcoinCore(storage: storage,
                 cache: myOutputsCache,

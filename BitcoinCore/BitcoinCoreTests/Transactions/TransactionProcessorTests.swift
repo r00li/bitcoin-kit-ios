@@ -36,6 +36,7 @@ class TransactionProcessorTests: XCTestCase {
             when(mock.transaction(byHash: any())).thenReturn(nil)
             when(mock.add(transaction: any())).thenDoNothing()
             when(mock.update(transaction: any())).thenDoNothing()
+            when(mock.update(block: any())).thenDoNothing()
         }
         stub(mockOutputsCache) { mock in
             when(mock.add(fromOutputs: any())).thenDoNothing()
@@ -178,6 +179,44 @@ class TransactionProcessorTests: XCTestCase {
         }
     }
 
+    func testProcessReceivedMempool_After_Block_TransactionExists() {
+        let transaction = TestData.p2pkhTransaction
+        let block = TestData.firstBlock
+        transaction.header.status = .new
+
+        stub(mockStorage) { mock in
+            when(mock.transaction(byHash: equal(to: transaction.header.dataHash))).thenReturn(transaction.header)
+        }
+
+        try! transactionProcessor.processReceived(transactions: [transaction], inBlock: block, skipCheckBloomFilter: false)
+        try! transactionProcessor.processReceived(transactions: [transaction], inBlock: nil, skipCheckBloomFilter: false)
+
+        XCTAssertEqual(transaction.header.status, TransactionStatus.relayed)
+        XCTAssertEqual(transaction.header.blockHash, block.headerHash)
+        XCTAssertEqual(transaction.header.timestamp, block.timestamp)
+        XCTAssertEqual(transaction.header.order, 0)
+    }
+
+    func testProcessReceivedBlock_After_Block_TransactionExists() {
+        let transaction = TestData.p2pkhTransaction
+        let block = TestData.firstBlock
+        let nextBlock = TestData.secondBlock
+        transaction.header.status = .new
+
+        stub(mockStorage) { mock in
+            when(mock.transaction(byHash: equal(to: transaction.header.dataHash))).thenReturn(transaction.header)
+        }
+
+        try! transactionProcessor.processReceived(transactions: [transaction], inBlock: block, skipCheckBloomFilter: false)
+        try! transactionProcessor.processReceived(transactions: [transaction], inBlock: nextBlock, skipCheckBloomFilter: false)
+
+        XCTAssertEqual(transaction.header.status, TransactionStatus.relayed)
+        XCTAssertEqual(transaction.header.blockHash, nextBlock.headerHash)
+        XCTAssertEqual(transaction.header.timestamp, nextBlock.timestamp)
+        XCTAssertEqual(transaction.header.order, 0)
+    }
+
+
     func testProcessReceived_SeveralTransactionsInBlock() {
         let transactions = self.transactions()
         let block = TestData.firstBlock
@@ -200,6 +239,7 @@ class TransactionProcessorTests: XCTestCase {
         verify(mockStorage).update(transaction: equal(to: transactions[1].header))
         verify(mockStorage).add(transaction: equal(to: transactions[2]))
         verify(mockStorage).update(transaction: equal(to: transactions[3].header))
+        verify(mockStorage).update(block: equal(to: block))
         verify(mockBlockchainDataListener).onUpdate(updated: equal(to: [transactions[1].header, transactions[3].header]), inserted: equal(to: [transactions[0].header, transactions[2].header]), inBlock: equal(to: block))
 
         for (i, transaction) in transactions.enumerated() {

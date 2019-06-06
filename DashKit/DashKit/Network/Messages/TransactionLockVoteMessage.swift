@@ -1,8 +1,6 @@
 import BitcoinCore
 
 struct TransactionLockVoteMessage: IMessage {
-    let command: String = "txlvote"
-
     //  TXID of the transaction to lock
     let txHash: Data
     //  The unspent outpoint to lock in this transaction
@@ -18,6 +16,10 @@ struct TransactionLockVoteMessage: IMessage {
 
     let hash: Data
 
+    var description: String {
+        return "\(txHash.reversedHex)"
+    }
+
 }
 
 extension TransactionLockVoteMessage: Hashable {
@@ -27,7 +29,7 @@ extension TransactionLockVoteMessage: Hashable {
     }
 
     public static func ==(lhs: TransactionLockVoteMessage, rhs: TransactionLockVoteMessage) -> Bool {
-        return lhs.hash == rhs.hash
+        return lhs.hash == rhs.hash && lhs.vchMasternodeSignature == rhs.vchMasternodeSignature
     }
 
 }

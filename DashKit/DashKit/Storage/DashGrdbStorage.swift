@@ -49,6 +49,23 @@ class DashGrdbStorage: GrdbStorage {
                 t.primaryKey([InstantTransactionHash.Columns.txHash.name], onConflict: .ignore)
             }
         }
+        migrator.registerMigration("createQuorums") { db in
+            try db.create(table: Quorum.databaseTableName) { t in
+                t.column(Quorum.Columns.hash.name, .text).notNull()
+                t.column(Quorum.Columns.version.name, .integer).notNull()
+                t.column(Quorum.Columns.type.name, .integer).notNull()
+                t.column(Quorum.Columns.quorumHash.name, .text).notNull()
+                t.column(Quorum.Columns.typeWithQuorumHash.name, .text).notNull()
+                t.column(Quorum.Columns.signers.name, .text).notNull()
+                t.column(Quorum.Columns.validMembers.name, .text).notNull()
+                t.column(Quorum.Columns.quorumPublicKey.name, .text).notNull()
+                t.column(Quorum.Columns.quorumVvecHash.name, .text).notNull()
+                t.column(Quorum.Columns.quorumSig.name, .text).notNull()
+                t.column(Quorum.Columns.sig.name, .text).notNull()
+
+                t.primaryKey([Quorum.Columns.hash.name], onConflict: .replace)
+            }
+        }
 
         return migrator
     }
@@ -71,6 +88,20 @@ extension DashGrdbStorage: IDashStorage {
         }
     }
 
+    var quorums: [Quorum] {
+        get {
+            return try! dbPool.read { db in
+                try Quorum.fetchAll(db)
+            }
+        }
+        set {
+            _ = try? dbPool.write { db in
+                try Quorum.deleteAll(db)
+                try newValue.forEach { try $0.insert(db) }
+            }
+        }
+    }
+
     var masternodeListState: MasternodeListState? {
         get {
             return try! dbPool.read { db in
@@ -87,6 +118,12 @@ extension DashGrdbStorage: IDashStorage {
             _ = try? dbPool.write { db in
                 try newValue.insert(db)
             }
+        }
+    }
+
+    func quorums(by type: QuorumType) -> [Quorum] {
+        return try! dbPool.read { db in
+            try Quorum.filter(Quorum.Columns.type == type.rawValue).fetchAll(db)
         }
     }
 

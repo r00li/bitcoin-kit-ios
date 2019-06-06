@@ -105,21 +105,13 @@ class TransactionLockVoteManagerTests: QuickSpec {
             }
         }
 
-        describe("#removeCheckedLockVotes(for txHash: Data)") {
-            beforeEach {
-                lockVotes.forEach {
-                    manager.add(checked: $0)
+        describe("#validate(lockVote: TransactionLockVoteMessage)") {
+            it("checks call validate method") {
+                stub(mockLockVoteValidator) { mock in
+                    when(mock.validate(lockVote: equal(to: lockVotes[0]))).thenDoNothing()
                 }
-            }
-            it("returns remove all elements for txHash but leave others") {
-                let txHashForRemoving = lockVotes[0].txHash
-                expect(manager.checkedLockVotes.contains(lockVotes[0])).to(equal(true))
-                expect(manager.checkedLockVotes.contains(lockVotes[1])).to(equal(true))
-
-                manager.removeCheckedLockVotes(for: txHashForRemoving)
-
-                expect(manager.checkedLockVotes.contains(lockVotes[0])).to(equal(false))
-                expect(manager.checkedLockVotes.contains(lockVotes[1])).to(equal(false))
+                try? manager.validate(lockVote: lockVotes[0])
+                verify(mockLockVoteValidator).validate(lockVote: equal(to: lockVotes[0]))
             }
         }
 

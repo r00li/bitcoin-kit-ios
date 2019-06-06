@@ -88,20 +88,27 @@ class PeerConnection: NSObject {
             } else {
                 packets += Data(bytesNoCopy: buffer, count: numberOfBytesRead, deallocator: .none)
             }
-        }
 
-        while packets.count >= NetworkMessage.minimumLength {
-            guard let networkMessage = networkMessageParser.parse(data: packets) else {
-                return
+            while packets.count >= NetworkMessage.minimumLength {
+                guard let networkMessage = networkMessageParser.parse(data: packets) else {
+                    break
+                }
+
+                packets = Data(packets.dropFirst(NetworkMessage.minimumLength + Int(networkMessage.length)))
+                let message = networkMessage.message
+
+                guard !(message is UnknownMessage) else {
+                    break
+                }
+
+                log("<- \(type(of: message)): \(message.description)")
+                delegate?.connection(didReceiveMessage: message)
             }
-
-            packets = Data(packets.dropFirst(NetworkMessage.minimumLength + Int(networkMessage.length)))
-            delegate?.connection(didReceiveMessage: networkMessage.message)
         }
     }
 
-    private func log(_ message: String, level: Logger.Level = .debug, file: String = #file, function: String = #function, line: Int = #line) {
-        logger?.log(level: level, message: message, file: file, function: function, line: line, context: logName)
+    private func log(_ message: @autoclosure () -> Any, level: Logger.Level = .debug, file: String = #file, function: String = #function, line: Int = #line) {
+        logger?.log(level: level, message: message(), file: file, function: function, line: line, context: logName)
     }
 }
 
@@ -151,10 +158,14 @@ extension PeerConnection: IPeerConnection {
     }
 
     func send(message: IMessage) {
+        log("-> \(type(of: message)): \(message.description)")
         do {
             let data = try networkMessageSerializer.serialize(message: message)
+            guard !data.isEmpty else {
+                return
+            }
             _ = data.withUnsafeBytes {
-                outputStream?.write($0, maxLength: data.count)
+                outputStream?.write($0.baseAddress!.assumingMemoryBound(to: UInt8.self), maxLength: data.count)
             }
         } catch {
             log("Connection can't send message \(message) with error \(error)", level: .error) //todo catch error when try send message not registered in serializers

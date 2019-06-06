@@ -1,15 +1,43 @@
 import Foundation
 
 class GetMerkleBlocksTask: PeerTask {
+    struct TooSlowPeer: Error {
+        let minMerkleBlocks: Int
+        let minTransactionsCount: Int
+        let minTransactionsSize: Int
+        let merkleBlocks: Int
+        let transactionsCount: Int
+        let transactionsSize: Int
+    }
+
+    private var waitingStartTime: Double = 0
+    private var totalWaitingTime: Double = 0
+    private var warningsCount = 0
+    private var firstResponseReceived = false
+
+    private var minMerkleBlocksCount: Double
+    private var minTransactionsCount: Double
+    private var minTransactionsSize: Double
+    private var merkleBlocksCount = 0
+    private var transactionsCount = 0
+    private var transactionsSize = 0
 
     private let allowedIdleTime = 60.0
     private var blockHashes: [BlockHash]
     private var pendingMerkleBlocks = [MerkleBlock]()
+    private var merkleBlockValidator: IMerkleBlockValidator
     private weak var merkleBlockHandler: IMerkleBlockHandler?
 
-    init(blockHashes: [BlockHash], merkleBlockHandler: IMerkleBlockHandler, dateGenerator: @escaping () -> Date = Date.init) {
+    init(blockHashes: [BlockHash], merkleBlockValidator: IMerkleBlockValidator, merkleBlockHandler: IMerkleBlockHandler,
+         minMerkleBlocksCount: Double, minTransactionsCount: Double, minTransactionsSize: Double,
+         dateGenerator: @escaping () -> Date = Date.init) {
         self.blockHashes = blockHashes
+        self.merkleBlockValidator = merkleBlockValidator
         self.merkleBlockHandler = merkleBlockHandler
+        self.minMerkleBlocksCount = minMerkleBlocksCount
+        self.minTransactionsCount = minTransactionsCount
+        self.minTransactionsSize = minTransactionsSize
+
         super.init(dateGenerator: dateGenerator)
     }
 
@@ -18,11 +46,84 @@ class GetMerkleBlocksTask: PeerTask {
             InventoryItem(type: InventoryItem.ObjectType.filteredBlockMessage.rawValue, hash: blockHash.headerHash)
         }
 
-        requester?.getData(items: items)
+        requester?.send(message: GetDataMessage(inventoryItems: items))
+        resumeWaiting()
         resetTimer()
     }
 
-    override func handle(merkleBlock: MerkleBlock) -> Bool {
+    override func handle(message: IMessage) throws -> Bool {
+        pauseWaiting()
+        var handled = false
+
+        switch message {
+        case let merkleBlockMessage as MerkleBlockMessage:
+            let merkleBlock = try merkleBlockValidator.merkleBlock(from: merkleBlockMessage)
+            merkleBlocksCount += 1
+            transactionsCount += Int(merkleBlockMessage.totalTransactions)
+            handled = handle(merkleBlock: merkleBlock)
+
+        case let transactionMessage as TransactionMessage:
+            transactionsSize += transactionMessage.size
+            handled = handle(transaction: transactionMessage.transaction)
+
+        default: ()
+        }
+
+        resumeWaiting()
+        return handled
+    }
+
+    override func checkTimeout() {
+        guard !blockHashes.isEmpty else {
+            delegate?.handle(completedTask: self)
+            return
+        }
+
+        pauseWaiting()
+        guard totalWaitingTime >= 1 else {
+            resumeWaiting()
+            return
+        }
+
+
+        let minMerkleBlocksCount = Int((self.minMerkleBlocksCount * totalWaitingTime).rounded())
+        let minTransactionsCount = Int((self.minTransactionsCount * totalWaitingTime).rounded())
+        let minTransactionsSize = Int((self.minTransactionsSize * totalWaitingTime).rounded())
+
+        if merkleBlocksCount < minMerkleBlocksCount && transactionsCount < minTransactionsCount && transactionsSize < minTransactionsSize {
+            warningsCount += 1
+            if warningsCount >= 10 {
+                delegate?.handle(failedTask: self, error: TooSlowPeer(
+                        minMerkleBlocks: minMerkleBlocksCount, minTransactionsCount: minTransactionsCount, minTransactionsSize: minTransactionsSize,
+                        merkleBlocks: merkleBlocksCount, transactionsCount: transactionsCount, transactionsSize: transactionsSize
+                ))
+                return
+            }
+        }
+
+        totalWaitingTime = 0
+        merkleBlocksCount = 0
+        transactionsCount = 0
+        transactionsSize = 0
+        resumeWaiting()
+    }
+
+    private func pauseWaiting() {
+        let timePassed = dateGenerator().timeIntervalSince1970 - waitingStartTime
+
+        if firstResponseReceived {
+            totalWaitingTime += timePassed
+        } else {
+            firstResponseReceived = true
+            totalWaitingTime += timePassed / 2
+        }
+    }
+
+    private func resumeWaiting() {
+        waitingStartTime = dateGenerator().timeIntervalSince1970
+    }
+
+    private func handle(merkleBlock: MerkleBlock) -> Bool {
         guard let blockHash = blockHashes.first(where: { blockHash in blockHash.headerHash == merkleBlock.headerHash }) else {
             return false
         }
@@ -39,8 +140,8 @@ class GetMerkleBlocksTask: PeerTask {
         return true
     }
 
-    override func handle(transaction: FullTransaction) -> Bool {
-        if let index = pendingMerkleBlocks.index(where: { $0.transactionHashes.contains(transaction.header.dataHash) }) {
+    private func handle(transaction: FullTransaction) -> Bool {
+        if let index = pendingMerkleBlocks.firstIndex(where: { $0.transactionHashes.contains(transaction.header.dataHash) }) {
             resetTimer()
 
             let block = pendingMerkleBlocks[index]
@@ -57,20 +158,8 @@ class GetMerkleBlocksTask: PeerTask {
         return false
     }
 
-    override func checkTimeout() {
-        if let lastActiveTime = lastActiveTime {
-            if dateGenerator().timeIntervalSince1970 - lastActiveTime > allowedIdleTime {
-                if blockHashes.isEmpty {
-                    delegate?.handle(completedTask: self)
-                } else {
-                    delegate?.handle(failedTask: self, error: TimeoutError())
-                }
-            }
-        }
-    }
-
     private func handle(completeMerkleBlock merkleBlock: MerkleBlock) {
-        if let index = blockHashes.index(where: { $0.headerHash == merkleBlock.headerHash }) {
+        if let index = blockHashes.firstIndex(where: { $0.headerHash == merkleBlock.headerHash }) {
             blockHashes.remove(at: index)
         }
 

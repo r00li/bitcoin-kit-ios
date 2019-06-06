@@ -12,17 +12,21 @@ public enum PeerGroupEvent {
 }
 
 class PeerGroup {
+    private static let acceptableBlockHeightDifference = 50_000
+    private static let peerCountToConnect = 100
+
     private let factory: IFactory
 
     private let reachabilityManager: IReachabilityManager
     private var peerAddressManager: IPeerAddressManager
     private var peerManager: IPeerManager
 
-    private var peerCount: Int
+    private let localDownloadedBestBlockHeight: Int32
+    private let peerCountToHold: Int            // number of peers held
+    private var peerCountToConnect: Int?        // number of peers to connect to
+    private var peerCountConnected = 0          // number of peers connected to
 
     private var started: Bool = false
-    private var _started: Bool = false
-
 
     private let peersQueue: DispatchQueue
     private let inventoryQueue: DispatchQueue
@@ -37,8 +41,8 @@ class PeerGroup {
     let observable: Observable<PeerGroupEvent>
 
     init(factory: IFactory, reachabilityManager: IReachabilityManager,
-         peerAddressManager: IPeerAddressManager, peerCount: Int = 10, peerManager: IPeerManager,
-         peersQueue: DispatchQueue = DispatchQueue(label: "PeerGroup Local Queue", qos: .userInitiated),
+         peerAddressManager: IPeerAddressManager, peerCount: Int = 10, localDownloadedBestBlockHeight: Int32,
+         peerManager: IPeerManager, peersQueue: DispatchQueue = DispatchQueue(label: "PeerGroup Local Queue", qos: .userInitiated),
          inventoryQueue: DispatchQueue = DispatchQueue(label: "PeerGroup Inventory Queue", qos: .background),
          subjectQueue: DispatchQueue = DispatchQueue(label: "PeerGroup Subject Queue", qos: .background),
          scheduler: SchedulerType = SerialDispatchQueueScheduler(qos: .background),
@@ -47,7 +51,8 @@ class PeerGroup {
 
         self.reachabilityManager = reachabilityManager
         self.peerAddressManager = peerAddressManager
-        self.peerCount = peerCount
+        self.localDownloadedBestBlockHeight = localDownloadedBestBlockHeight
+        self.peerCountToHold = peerCount
         self.peerManager = peerManager
 
         self.peersQueue = peersQueue
@@ -66,16 +71,23 @@ class PeerGroup {
                 return
             }
 
-            for _ in self.peerManager.totalPeersCount()..<self.peerCount {
+            var peersToConnect = [IPeer]()
+
+            for _ in self.peerManager.totalPeersCount()..<self.peerCountToHold {
                 if let host = self.peerAddressManager.ip {
                     let peer = self.factory.peer(withHost: host, logger: self.logger)
                     peer.delegate = self
-                    self.onNext(.onPeerCreate(peer: peer))
-                    self.peerManager.add(peer: peer)
-                    peer.connect()
+                    peersToConnect.append(peer)
                 } else {
                     break
                 }
+            }
+
+            for peer in peersToConnect {
+                self.peerCountConnected += 1
+                self.onNext(.onPeerCreate(peer: peer))
+                self.peerManager.add(peer: peer)
+                peer.connect()
             }
         }
     }
@@ -96,6 +108,7 @@ extension PeerGroup: IPeerGroup {
         }
 
         started = true
+        peerCountConnected = 0
 
         onNext(.onStart)
         connectPeersIfRequired()
@@ -125,7 +138,31 @@ extension PeerGroup: PeerDelegate {
     }
 
     func peerDidConnect(_ peer: IPeer) {
+        peerAddressManager.markConnected(peer: peer)
         onNext(.onPeerConnect(peer: peer))
+
+        if let peerCountToConnect = peerCountToConnect {
+            disconnectSlowestPeer(peerCountToConnect: peerCountToConnect)
+        } else {
+            setPeerCountToConnect(for: peer)
+        }
+    }
+
+    private func setPeerCountToConnect(for peer: IPeer) {
+        if peer.announcedLastBlockHeight - localDownloadedBestBlockHeight > PeerGroup.acceptableBlockHeightDifference {
+            peerCountToConnect = PeerGroup.peerCountToConnect
+        } else {
+            peerCountToConnect = 0
+        }
+    }
+
+    private func disconnectSlowestPeer(peerCountToConnect: Int) {
+        if peerCountToConnect > peerCountConnected && peerCountToHold > 1 && peerAddressManager.hasFreshIps {
+            let sortedPeers = peerManager.sorted()
+            if sortedPeers.count >= peerCountToHold {
+                sortedPeers.last?.disconnect(error: nil)
+            }
+        }
     }
 
     func peerDidDisconnect(_ peer: IPeer, withError error: Error?) {
@@ -151,15 +188,17 @@ extension PeerGroup: PeerDelegate {
         _ = peerTaskHandler?.handleCompletedTask(peer: peer, task: task)
     }
 
-    func peer(_ peer: IPeer, didReceiveAddresses addresses: [NetworkAddress]) {
-        self.peerAddressManager.add(ips: addresses.map {
-            $0.address
-        })
-    }
-
-    func peer(_ peer: IPeer, didReceiveInventoryItems items: [InventoryItem]) {
-        inventoryQueue.async {
-            self.inventoryItemsHandler?.handleInventoryItems(peer: peer, inventoryItems: items)
+    func peer(_ peer: IPeer, didReceiveMessage message: IMessage) {
+        switch message {
+        case let addressMessage as AddressMessage:
+            self.peerAddressManager.add(ips: addressMessage.addressList.map {
+                $0.address
+            })
+        case let inventoryMessage as InventoryMessage:
+            inventoryQueue.async {
+                self.inventoryItemsHandler?.handleInventoryItems(peer: peer, inventoryItems: inventoryMessage.inventoryItems)
+            }
+        default: ()
         }
     }
 

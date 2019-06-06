@@ -20,9 +20,10 @@ public class DashKit: AbstractKit {
     private let storage: IDashStorage
 
     private var masternodeSyncer: MasternodeListSyncer?
+    private var instantSend: InstantSend?
     private let dashTransactionInfoConverter: ITransactionInfoConverter
 
-    public init(withWords words: [String], walletId: String, newWallet: Bool = false, networkType: NetworkType = .mainNet, confirmationsThreshold: Int = 6, minLogLevel: Logger.Level = .verbose) throws {
+    public init(withWords words: [String], walletId: String, syncMode: BitcoinCore.SyncMode = .api, networkType: NetworkType = .mainNet, confirmationsThreshold: Int = 6, minLogLevel: Logger.Level = .verbose) throws {
         let network: INetwork
         var initialSyncApiUrl: String
 
@@ -62,23 +63,24 @@ public class DashKit: AbstractKit {
                 .set(paymentAddressParser: paymentAddressParser)
                 .set(addressSelector: addressSelector)
                 .set(walletId: walletId)
-                .set(peerSize: 4)
+                .set(peerSize: 10)
                 .set(storage: storage)
-                .set(newWallet: newWallet)
+                .set(syncMode: syncMode)
                 .set(blockHeaderHasher: x11Hasher)
                 .set(transactionInfoConverter: dashTransactionInfoConverter)
                 .build()
-
         super.init(bitcoinCore: bitcoinCore, network: network)
         bitcoinCore.delegate = self
 
         // extending BitcoinCore
 
         let masternodeParser = MasternodeParser(hasher: singleHasher)
+        let quorumParser = QuorumParser(hasher: doubleShaHasher)
 
         bitcoinCore.add(messageParser: TransactionLockMessageParser())
                 .add(messageParser: TransactionLockVoteMessageParser())
-                .add(messageParser: MasternodeListDiffMessageParser(masternodeParser: masternodeParser))
+                .add(messageParser: MasternodeListDiffMessageParser(masternodeParser: masternodeParser, quorumParser: quorumParser))
+                .add(messageParser: ISLockParser(hasher: doubleShaHasher))
 
         bitcoinCore.add(messageSerializer: GetMasternodeListDiffMessageSerializer())
 
@@ -88,10 +90,10 @@ public class DashKit: AbstractKit {
         let targetTimespan = DashKit.heightInterval * DashKit.targetSpacing                 // Time to mining all 24 blocks in circle
         switch networkType {
         case .mainNet:
-            bitcoinCore.add(blockValidator: DarkGravityWaveValidator(encoder: difficultyEncoder, blockHelper: blockHelper, heightInterval: DashKit.heightInterval , targetTimeSpan: targetTimespan, maxTargetBits: DashKit.maxTargetBits, firstCheckpointHeight: network.checkpointBlock.height))
+            bitcoinCore.add(blockValidator: DarkGravityWaveValidator(encoder: difficultyEncoder, blockHelper: blockHelper, heightInterval: DashKit.heightInterval , targetTimeSpan: targetTimespan, maxTargetBits: DashKit.maxTargetBits, firstCheckpointHeight: network.lastCheckpointBlock.height))
         case .testNet:
             bitcoinCore.add(blockValidator: DarkGravityWaveTestNetValidator(difficultyEncoder: difficultyEncoder, targetSpacing: DashKit.targetSpacing, targetTimeSpan: targetTimespan, maxTargetBits: DashKit.maxTargetBits))
-            bitcoinCore.add(blockValidator: DarkGravityWaveValidator(encoder: difficultyEncoder, blockHelper: blockHelper, heightInterval: DashKit.heightInterval, targetTimeSpan: targetTimespan, maxTargetBits: DashKit.maxTargetBits, firstCheckpointHeight: network.checkpointBlock.height))
+            bitcoinCore.add(blockValidator: DarkGravityWaveValidator(encoder: difficultyEncoder, blockHelper: blockHelper, heightInterval: DashKit.heightInterval, targetTimeSpan: targetTimespan, maxTargetBits: DashKit.maxTargetBits, firstCheckpointHeight: network.lastCheckpointBlock.height))
         }
 
         let merkleBranch = MerkleBranch(hasher: doubleShaHasher)
@@ -99,10 +101,14 @@ public class DashKit: AbstractKit {
         let masternodeSerializer = MasternodeSerializer()
         let coinbaseTransactionSerializer = CoinbaseTransactionSerializer()
         let masternodeCbTxHasher = MasternodeCbTxHasher(coinbaseTransactionSerializer: coinbaseTransactionSerializer, hasher: doubleShaHasher)
+
         let masternodeMerkleRootCreator = MerkleRootCreator(hasher: doubleShaHasher)
+        let quorumMerkleRootCreator = MerkleRootCreator(hasher: doubleShaHasher)
 
         let masternodeListMerkleRootCalculator = MasternodeListMerkleRootCalculator(masternodeSerializer: masternodeSerializer, masternodeHasher: doubleShaHasher, masternodeMerkleRootCreator: masternodeMerkleRootCreator)
-        let masternodeListManager = MasternodeListManager(storage: storage, masternodeListMerkleRootCalculator: masternodeListMerkleRootCalculator, masternodeCbTxHasher: masternodeCbTxHasher, merkleBranch: merkleBranch)
+        let quorumListMerkleRootCalculator = QuorumListMerkleRootCalculator(merkleRootCreator: quorumMerkleRootCreator, quorumHasher: doubleShaHasher)
+        let quorumListManager = QuorumListManager(storage: storage, hasher: doubleShaHasher, quorumListMerkleRootCalculator: quorumListMerkleRootCalculator, merkleBranch: merkleBranch)
+        let masternodeListManager = MasternodeListManager(storage: storage, quorumListManager: quorumListManager, masternodeListMerkleRootCalculator: masternodeListMerkleRootCalculator, masternodeCbTxHasher: masternodeCbTxHasher, merkleBranch: merkleBranch)
         let masternodeSyncer = MasternodeListSyncer(bitcoinCore: bitcoinCore, initialBlockDownload: bitcoinCore.initialBlockDownload, peerTaskFactory: PeerTaskFactory(), masternodeListManager: masternodeListManager)
 
         bitcoinCore.add(peerTaskHandler: masternodeSyncer)
@@ -114,15 +120,23 @@ public class DashKit: AbstractKit {
 
         let calculator = TransactionSizeCalculator()
         let confirmedUnspentOutputProvider = ConfirmedUnspentOutputProvider(storage: storage, confirmationsThreshold: confirmationsThreshold)
-        bitcoinCore.prepend(unspentOutputSelector: UnspentOutputSelector(calculator: calculator, provider: confirmedUnspentOutputProvider, outputsLimit: 4))
+        bitcoinCore.prepend(unspentOutputSelector: UnspentOutputSelector(calculator: calculator, provider: confirmedUnspentOutputProvider))
         bitcoinCore.prepend(unspentOutputSelector: UnspentOutputSelectorSingleNoChange(calculator: calculator, provider: confirmedUnspentOutputProvider))
 // --------------------------------------
         let transactionLockVoteValidator = TransactionLockVoteValidator(storage: storage, hasher: singleHasher)
+        let instantSendLockValidator = InstantSendLockValidator(quorumListManager: quorumListManager, hasher: doubleShaHasher)
+
         let instantTransactionSyncer = InstantTransactionSyncer(transactionSyncer: bitcoinCore.transactionSyncer)
         let lockVoteManager = TransactionLockVoteManager(transactionLockVoteValidator: transactionLockVoteValidator)
+        let instantSendLockManager = InstantSendLockManager(instantSendLockValidator: instantSendLockValidator)
 
-        let instantSend = InstantSend(transactionSyncer: instantTransactionSyncer, lockVoteManager: lockVoteManager, instantTransactionManager: instantTransactionManager, logger: logger)
-        instantSend.delegate = self
+        let instantSendLockHandler = InstantSendLockHandler(instantTransactionManager: instantTransactionManager, instantSendLockManager: instantSendLockManager, logger: logger)
+        instantSendLockHandler.delegate = self
+        let transactionLockVoteHandler = TransactionLockVoteHandler(instantTransactionManager: instantTransactionManager, lockVoteManager: lockVoteManager, logger: logger)
+        transactionLockVoteHandler.delegate = self
+
+        let instantSend = InstantSend(transactionSyncer: instantTransactionSyncer, transactionLockVoteHandler: transactionLockVoteHandler, instantSendLockHandler: instantSendLockHandler, logger: logger)
+        self.instantSend = instantSend
 
         bitcoinCore.add(peerTaskHandler: instantSend)
         bitcoinCore.add(inventoryItemsHandler: instantSend)
@@ -147,6 +161,9 @@ public class DashKit: AbstractKit {
 extension DashKit: BitcoinCoreDelegate {
 
     public func transactionsUpdated(inserted: [TransactionInfo], updated: [TransactionInfo]) {
+        // check for all new transactions if it's has instant lock
+        inserted.compactMap { Data(hex : $0.transactionHash) }.forEach { instantSend?.handle(insertedTxHash: $0) }
+
         delegate?.transactionsUpdated(inserted: cast(transactionInfos: inserted), updated: cast(transactionInfos: updated))
     }
 

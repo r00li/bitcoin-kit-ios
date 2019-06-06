@@ -6,8 +6,6 @@ class RegTest: INetwork {
     let pubKeyHash: UInt8 = 0x6f
     let privateKey: UInt8 = 0xef
     let scriptHash: UInt8 = 0xc4
-    let pubKeyPrefixPattern: String = "m|n"
-    let scriptPrefixPattern: String = "2"
     let bech32PrefixPattern: String = "bcrt"
     let xPubKey: UInt32 = 0x043587cf
     let xPrivKey: UInt32 = 0x04358394
@@ -24,7 +22,7 @@ class RegTest: INetwork {
          "btc03-regtest.horizontalsystems.xyz",
     ]
 
-    var genesisBlock: Block {
+    var bip44CheckpointBlock: Block {
         return Block(
                 withHeader: BlockHeader(
                         version: 1,
@@ -38,7 +36,7 @@ class RegTest: INetwork {
                 height: 0)
     }
 
-    var checkpointBlock: Block {
+    var lastCheckpointBlock: Block {
         return Block(
                 withHeader: BlockHeader(
                         version: 1,

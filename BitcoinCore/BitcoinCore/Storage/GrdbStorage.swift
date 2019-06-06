@@ -28,7 +28,7 @@ open class GrdbStorage {
                 t.column(PeerAddress.Columns.ip.name, .text).notNull()
                 t.column(PeerAddress.Columns.score.name, .integer).notNull()
 
-                t.primaryKey([PeerAddress.Columns.ip.name], onConflict: .replace)
+                t.primaryKey([PeerAddress.Columns.ip.name], onConflict: .ignore)
             }
         }
 
@@ -140,6 +140,20 @@ open class GrdbStorage {
             }
         }
 
+        migrator.registerMigration("addConnectionTimeToPeerAddresses") { db in
+            try db.alter(table: PeerAddress.databaseTableName) { t in
+                t.add(column: PeerAddress.Columns.connectionTime.name, .double)
+            }
+        }
+
+        migrator.registerMigration("addHasTransactionsToBlocks") { db in
+            try db.alter(table: Block.databaseTableName) { t in
+                t.add(column: Block.Columns.hasTransactions.name, .boolean).notNull().defaults(to: false)
+            }
+
+            try db.execute(sql: "UPDATE \(Block.databaseTableName) SET \(Block.Columns.hasTransactions.name) = true")
+        }
+
         return migrator
     }
 
@@ -164,19 +178,11 @@ extension GrdbStorage: IStorage {
 
     // PeerAddress
 
-    public func existingPeerAddresses(fromIps ips: [String]) -> [PeerAddress] {
-        return try! dbPool.read { db in
-            try PeerAddress
-                    .filter(ips.contains(PeerAddress.Columns.ip))
-                    .fetchAll(db)
-        }
-    }
-
-    public func leastScorePeerAddress(excludingIps: [String]) -> PeerAddress? {
+    public func leastScoreFastestPeerAddress(excludingIps: [String]) -> PeerAddress? {
         return try! dbPool.read { db in
             try PeerAddress
                     .filter(!excludingIps.contains(PeerAddress.Columns.ip))
-                    .order(PeerAddress.Columns.score.asc)
+                    .order(PeerAddress.Columns.score.asc, PeerAddress.Columns.connectionTime.asc)
                     .fetchOne(db)
         }
     }
@@ -204,6 +210,15 @@ extension GrdbStorage: IStorage {
         }
     }
 
+    public func set(connectionTime: Double, toPeerAddress ip: String) {
+        _ = try! dbPool.write { db in
+            if let peerAddress = try PeerAddress.filter(PeerAddress.Columns.ip == ip).fetchOne(db) {
+                peerAddress.connectionTime = connectionTime
+                try peerAddress.save(db)
+            }
+        }
+    }
+
     // BlockHash
 
     public var blockchainBlockHashes: [BlockHash] {
@@ -226,7 +241,7 @@ extension GrdbStorage: IStorage {
 
     public var blockHashHeaderHashes: [Data] {
         return try! dbPool.read { db in
-            let rows = try Row.fetchCursor(db, "SELECT headerHash from blockHashes")
+            let rows = try Row.fetchCursor(db, sql: "SELECT headerHash from blockHashes")
             var hashes = [Data]()
 
             while let row = try rows.next() {
@@ -239,7 +254,7 @@ extension GrdbStorage: IStorage {
 
     public func blockHashHeaderHashes(except excludedHash: Data) -> [String] {
         return try! dbPool.read { db in
-            let rows = try Row.fetchCursor(db, "SELECT headerHash from blockHashes WHERE headerHash != ?", arguments: [excludedHash])
+            let rows = try Row.fetchCursor(db, sql: "SELECT headerHash from blockHashes WHERE headerHash != ?", arguments: [excludedHash])
             var hexes = [String]()
 
             while let row = try rows.next() {
@@ -276,6 +291,16 @@ extension GrdbStorage: IStorage {
         }
     }
 
+    public func deleteUselessBlocks(before height: Int) {
+        _ = try! dbPool.write { db in
+            try Block.filter(Block.Columns.height < height).filter(Block.Columns.hasTransactions == false).deleteAll(db)
+        }
+    }
+
+    public func releaseMemory() {
+        dbPool.releaseMemory()
+    }
+
     // Block
 
     public var blocksCount: Int {
@@ -293,6 +318,12 @@ extension GrdbStorage: IStorage {
     public func blocksCount(headerHashes: [Data]) -> Int {
         return try! dbPool.read { db in
             try Block.filter(headerHashes.contains(Block.Columns.headerHash)).fetchCount(db)
+        }
+    }
+
+    public func update(block: Block) {
+        _ = try! dbPool.write { db in
+            try block.update(db)
         }
     }
 
@@ -374,7 +405,7 @@ extension GrdbStorage: IStorage {
 
     public func unstaleAllBlocks() throws {
         _ = try! dbPool.write { db in
-            try db.execute("UPDATE \(Block.databaseTableName) SET stale = ? WHERE stale = ?", arguments: [true, false])
+            try db.execute(sql: "UPDATE \(Block.databaseTableName) SET stale = ? WHERE stale = ?", arguments: [false, true])
         }
     }
 
@@ -383,6 +414,10 @@ extension GrdbStorage: IStorage {
         return try! dbPool.read { db in
             try Transaction.filter(Transaction.Columns.dataHash == hash).fetchOne(db)
         }
+    }
+
+    public func transactionExists(byHash hash: Data) -> Bool {
+        return transaction(byHash: hash) != nil
     }
 
     public func transactions(ofBlock block: Block) -> [Transaction] {
@@ -456,7 +491,7 @@ extension GrdbStorage: IStorage {
                           LEFT JOIN outputs ON inputs.previousOutputTxHash = outputs.transactionHash AND inputs.previousOutputIndex = outputs."index"
                           WHERE inputs.transactionHash IN (\(transactionHashChunks.map({ "x'" + $0.hex + "'" }).joined(separator: ",")))
                           """
-                let rows = try Row.fetchCursor(db, sql, adapter: adapter)
+                let rows = try Row.fetchCursor(db, sql: sql, adapter: adapter)
 
                 while let row = try rows.next() {
                     inputs.append(InputWithPreviousOutput(input: row["input"], previousOutput: row["output"]))
@@ -500,7 +535,7 @@ extension GrdbStorage: IStorage {
                       WHERE transactions.dataHash = \("x'" + hash.hex + "'")                    
                       """
 
-            let rows = try Row.fetchCursor(db, sql, adapter: adapter)
+            let rows = try Row.fetchCursor(db, sql: sql, adapter: adapter)
 
             if let row = try rows.next() {
                 transaction = TransactionWithBlock(transaction: row["transaction"], blockHeight: row["blockHeight"])
@@ -540,7 +575,7 @@ extension GrdbStorage: IStorage {
                 sql += " LIMIT \(limit)"
             }
 
-            let rows = try Row.fetchCursor(db, sql, adapter: adapter)
+            let rows = try Row.fetchCursor(db, sql: sql, adapter: adapter)
 
             while let row = try rows.next() {
                 transactions.append(TransactionWithBlock(transaction: row["transaction"], blockHeight: row["blockHeight"]))
@@ -574,7 +609,7 @@ extension GrdbStorage: IStorage {
                       LEFT JOIN transactions ON inputs.transactionHash = transactions.dataHash
                       LEFT JOIN blocks ON transactions.blockHash = blocks.headerHash
                       """
-            let rows = try Row.fetchCursor(db, sql, adapter: adapter)
+            let rows = try Row.fetchCursor(db, sql: sql, adapter: adapter)
 
             var outputs = [OutputWithPublicKey]()
             while let row = try rows.next() {
@@ -607,7 +642,7 @@ extension GrdbStorage: IStorage {
                       LEFT JOIN blocks ON transactions.blockHash = blocks.headerHash
                       WHERE outputs.scriptType != \(ScriptType.unknown.rawValue)
                       """
-            let rows = try Row.fetchCursor(db, sql, adapter: adapter)
+            let rows = try Row.fetchCursor(db, sql: sql, adapter: adapter)
 
             var outputs = [UnspentOutput]()
             while let row = try rows.next() {
@@ -704,7 +739,7 @@ extension GrdbStorage: IStorage {
                       LEFT JOIN outputs ON publicKeys.path = outputs.publicKeyPath
                       """
 
-            let rows = try Row.fetchCursor(db, sql, adapter: adapter)
+            let rows = try Row.fetchCursor(db, sql: sql, adapter: adapter)
             var publicKeys = [PublicKeyWithUsedState]()
             while let row = try rows.next() {
                 publicKeys.append(PublicKeyWithUsedState(publicKey: row["publicKey"], used: row["transactionHash"] != nil))

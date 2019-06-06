@@ -4,11 +4,14 @@ import RxSwift
 
 class BitcoinAdapter: BaseAdapter {
     private let bitcoinKit: BitcoinKit
+    override var changeableAddressType: Bool { return true }
 
-    init(words: [String], testMode: Bool) {
-        //let networkType: BitcoinKit.NetworkType = testMode ? .testNet : .mainNet
-        //bitcoinKit = try! BitcoinKit(withWords: words, walletId: "walletId", networkType: networkType, minLogLevel: Configuration.shared.minLogLevel)
+
+    init(words: [String], testMode: Bool, syncMode: BitcoinCore.SyncMode) {
         bitcoinKit = try! BitcoinKit(withPublicKey: "tpubDDYDWoUhYtXEFLqrfdL4UeKCBPLMDZBb2Svfi7UeCvEt4pWHiBD2AkvVYCUBsk4uHo9yYMJc1uQjtjaLPTx8RBKuZv844rmnZ9CsAb41fJ4", walletId: "SomeId3", testMode: true, minLogLevel: .verbose)
+
+        //let networkType: BitcoinKit.NetworkType = testMode ? .testNet : .mainNet
+        //bitcoinKit = try! BitcoinKit(withWords: words, walletId: "walletId", syncMode: syncMode, networkType: networkType, minLogLevel: Configuration.shared.minLogLevel)
 
         super.init(name: "Bitcoin", coinCode: "BTC", abstractKit: bitcoinKit)
         bitcoinKit.delegate = self

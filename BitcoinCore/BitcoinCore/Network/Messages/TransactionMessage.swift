@@ -1,8 +1,9 @@
-import Foundation
-
 struct TransactionMessage: IMessage {
-    let command: String = "tx"
-
     let transaction: FullTransaction
+    let size: Int
+
+    var description: String {
+        return "\(transaction.header.dataHash.reversedHex)"
+    }
 
 }

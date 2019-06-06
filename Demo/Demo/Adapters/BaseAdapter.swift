@@ -8,12 +8,18 @@ class BaseAdapter {
     let name: String
     let coinCode: String
 
+    var changeableAddressType: Bool { return false }
+
     private let abstractKit: AbstractKit
 
     let lastBlockSignal = Signal()
     let syncStateSignal = Signal()
     let balanceSignal = Signal()
     let transactionsSignal = Signal()
+
+    var debugInfo: String {
+        return abstractKit.debugInfo
+    }
 
     init(name: String, coinCode: String, abstractKit: AbstractKit) {
         self.name = name
@@ -63,11 +69,11 @@ class BaseAdapter {
 extension BaseAdapter {
 
     var lastBlockObservable: Observable<Void> {
-        return lastBlockSignal.asObservable().throttle(0.2, scheduler: ConcurrentDispatchQueueScheduler(qos: .userInitiated))
+        return lastBlockSignal.asObservable().throttle(DispatchTimeInterval.milliseconds(200), scheduler: ConcurrentDispatchQueueScheduler(qos: .userInitiated))
     }
 
     var syncStateObservable: Observable<Void> {
-        return syncStateSignal.asObservable().throttle(0.2, scheduler: ConcurrentDispatchQueueScheduler(qos: .userInitiated))
+        return syncStateSignal.asObservable().throttle(DispatchTimeInterval.milliseconds(200), scheduler: ConcurrentDispatchQueueScheduler(qos: .userInitiated))
     }
 
     var balanceObservable: Observable<Void> {
@@ -96,8 +102,8 @@ extension BaseAdapter {
         return abstractKit.syncState
     }
 
-    var receiveAddress: String {
-        return abstractKit.receiveAddress
+    func receiveAddress(for type: ScriptType) -> String {
+        return abstractKit.receiveAddress(for: type)
     }
 
     func validate(address: String) throws {

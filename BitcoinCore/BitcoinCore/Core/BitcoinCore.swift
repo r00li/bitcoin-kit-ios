@@ -197,8 +197,8 @@ extension BitcoinCore {
         return try transactionBuilder.fee(for: value, feeRate: feeRate, senderPay: senderPay, address: toAddress)
     }
 
-    public var receiveAddress: String {
-        return (try? addressManager.receiveAddress()) ?? ""
+    public func receiveAddress(for type: ScriptType) -> String {
+        return (try? addressManager.receiveAddress(for: type)) ?? ""
     }
 
     public var debugInfo: String {
@@ -273,6 +273,13 @@ extension BitcoinCore {
         case synced
         case syncing(progress: Double)
         case notSynced
+    }
+
+    public enum SyncMode: Equatable {
+        case full                           // Sync from bip44CheckpointBlock. Api restore disabled
+        case fromDate(date: TimeInterval)   // Sync from given date. Api restore disable
+        case api                            // Sync from lastCheckpointBlock. Api restore enabled
+        case newWallet                      // Sync from lastCheckpointBlock. Api restore enabled
     }
 
 }

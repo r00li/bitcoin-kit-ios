@@ -43,9 +43,11 @@ protocol IReachabilityManager {
 protocol IPeerAddressManager: class {
     var delegate: IPeerAddressManagerDelegate? { get set }
     var ip: String? { get }
+    var hasFreshIps: Bool { get }
     func markSuccess(ip: String)
     func markFailed(ip: String)
     func add(ips: [String])
+    func markConnected(peer: IPeer)
 }
 
 protocol IStateManager {
@@ -60,12 +62,11 @@ public protocol IStorage {
     var initialRestored: Bool? { get }
     func set(initialRestored: Bool)
 
-    func existingPeerAddresses(fromIps ips: [String]) -> [PeerAddress]
-    func leastScorePeerAddress(excludingIps: [String]) -> PeerAddress?
+    func leastScoreFastestPeerAddress(excludingIps: [String]) -> PeerAddress?
     func save(peerAddresses: [PeerAddress])
     func increasePeerAddressScore(ip: String)
     func deletePeerAddress(byIp ip: String)
-
+    func set(connectionTime: Double, toPeerAddress: String)
 
 
     var blockchainBlockHashes: [BlockHash] { get }
@@ -77,10 +78,13 @@ public protocol IStorage {
     func add(blockHashes: [BlockHash])
     func deleteBlockHash(byHash: Data)
     func deleteBlockchainBlockHashes()
+    func deleteUselessBlocks(before: Int)
+    func releaseMemory()
 
     var blocksCount: Int { get }
     var lastBlock: Block? { get }
     func blocksCount(headerHashes: [Data]) -> Int
+    func update(block: Block)
     func save(block: Block)
     func blocks(heightGreaterThan: Int, sortedBy: Block.Columns, limit: Int) -> [Block]
     func blocks(from startHeight: Int, to endHeight: Int, ascending: Bool) -> [Block]
@@ -95,6 +99,7 @@ public protocol IStorage {
     func unstaleAllBlocks() throws
 
 
+    func transactionExists(byHash: Data) -> Bool
     func transaction(byHash: Data) -> Transaction?
     func transactions(ofBlock: Block) -> [Transaction]
     func newTransactions() -> [Transaction]
@@ -129,7 +134,7 @@ public protocol IAddressSelector {
 
 public protocol IAddressManager {
     func changePublicKey() throws -> PublicKey
-    func receiveAddress() throws -> String
+    func receiveAddress(for type: ScriptType) throws -> String
     func fillGap() throws
     func addKeys(keys: [PublicKey]) throws
     func gapShifts() -> Bool
@@ -161,6 +166,7 @@ protocol IPeerManager: class {
     func disconnectAll()
     func totalPeersCount() -> Int
     func connected() -> [IPeer]
+    func sorted() -> [IPeer]
 }
 
 public protocol IPeer: class {
@@ -171,6 +177,7 @@ public protocol IPeer: class {
     var logName: String { get }
     var ready: Bool { get }
     var connected: Bool { get }
+    var connectionTime: Double { get }
     func connect()
     func disconnect(error: Error?)
     func add(task: PeerTask)
@@ -187,17 +194,12 @@ public protocol PeerDelegate: class {
     func peerDidDisconnect(_ peer: IPeer, withError error: Error?)
 
     func peer(_ peer: IPeer, didCompleteTask task: PeerTask)
-    func peer(_ peer: IPeer, didReceiveAddresses addresses: [NetworkAddress])
-    func peer(_ peer: IPeer, didReceiveInventoryItems items: [InventoryItem])
+    func peer(_ peer: IPeer, didReceiveMessage message: IMessage)
 }
 
 public protocol IPeerTaskRequester: class {
-    func getBlocks(hashes: [Data])
-    func getData(items: [InventoryItem])
-    func sendTransactionInventory(hash: Data)
-    func send(transaction: FullTransaction)
+    var protocolVersion: Int32 { get }
     func send(message: IMessage)
-    func ping(nonce: UInt64)
 }
 
 public protocol IPeerTaskDelegate: class {
@@ -281,6 +283,10 @@ protocol IInitialSyncerDelegate: class {
 
 protocol IPaymentAddressParser {
     func parse(paymentAddress: String) -> BitcoinPaymentData
+}
+
+public protocol IAddressKeyHashConverter {
+    func convert(keyHash: Data, type: ScriptType) -> Data
 }
 
 public protocol IAddressConverter {
@@ -440,16 +446,14 @@ public protocol INetwork: class {
     var pubKeyHash: UInt8 { get }
     var privateKey: UInt8 { get }
     var scriptHash: UInt8 { get }
-    var pubKeyPrefixPattern: String { get }
-    var scriptPrefixPattern: String { get }
     var bech32PrefixPattern: String { get }
     var xPubKey: UInt32 { get }
     var xPrivKey: UInt32 { get }
     var magic: UInt32 { get }
     var port: UInt32 { get }
     var dnsSeeds: [String] { get }
-    var genesisBlock: Block { get }
-    var checkpointBlock: Block { get }
+    var bip44CheckpointBlock: Block { get }
+    var lastCheckpointBlock: Block { get }
     var coinType: UInt32 { get }
     var sigHash: SigHashType { get }
     var syncableFromApi: Bool { get }
@@ -473,6 +477,10 @@ public extension INetwork {
 
 }
 
+public protocol IMessage {
+    var description: String { get }
+}
+
 protocol INetworkMessageParser {
     func parse(data: Data) -> NetworkMessage?
 }
@@ -492,7 +500,7 @@ protocol INetworkMessageSerializer {
 
 public protocol IMessageSerializer {
     var id: String { get }
-    func serialize(message: IMessage) throws -> Data
+    func serialize(message: IMessage) -> Data?
 }
 
 public protocol IInitialBlockDownload {

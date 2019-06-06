@@ -20,7 +20,7 @@ public class BitcoinKit: AbstractKit {
         }
     }
 
-    public init(withWords words: [String], walletId: String, newWallet: Bool = false, networkType: NetworkType = .mainNet, minLogLevel: Logger.Level = .verbose) throws {
+    public init(withWords words: [String], walletId: String, syncMode: BitcoinCore.SyncMode = .api, networkType: NetworkType = .mainNet, minLogLevel: Logger.Level = .verbose) throws {
         let network: INetwork
         let initialSyncApiUrl: String
 
@@ -43,6 +43,7 @@ public class BitcoinKit: AbstractKit {
 
         let paymentAddressParser = PaymentAddressParser(validScheme: "bitcoin", removeScheme: true)
         let addressSelector = BitcoinAddressSelector()
+        let addressKeyHashConverter = SegWitBech32KeyHashConverter()
 
         let bitcoinCore = try BitcoinCoreBuilder(minLogLevel: minLogLevel)
                 .set(network: network)
@@ -50,9 +51,10 @@ public class BitcoinKit: AbstractKit {
                 .set(words: words)
                 .set(paymentAddressParser: paymentAddressParser)
                 .set(addressSelector: addressSelector)
+                .set(addressKeyHashConverter: addressKeyHashConverter)
                 .set(walletId: walletId)
                 .set(peerSize: 10)
-                .set(newWallet: newWallet)
+                .set(syncMode: syncMode)
                 .set(storage: storage)
                 .build()
 
@@ -104,6 +106,7 @@ public class BitcoinKit: AbstractKit {
         
         let paymentAddressParser = PaymentAddressParser(validScheme: "bitcoin", removeScheme: true)
         let addressSelector = BitcoinAddressSelector()
+        let addressKeyHashConverter = SegWitBech32KeyHashConverter()
         
         let bitcoinCore = try BitcoinCoreBuilder(minLogLevel: minLogLevel)
             .set(network: network)
@@ -111,9 +114,10 @@ public class BitcoinKit: AbstractKit {
             .set(xpub: withPublicKey)
             .set(paymentAddressParser: paymentAddressParser)
             .set(addressSelector: addressSelector)
+            .set(addressKeyHashConverter: addressKeyHashConverter)
             .set(walletId: walletId)
             .set(peerSize: 10)
-            .set(newWallet: false)
+            .set(syncMode: .api)
             .set(storage: storage)
             .build()
         
@@ -164,6 +168,7 @@ public class BitcoinKit: AbstractKit {
         
         let paymentAddressParser = PaymentAddressParser(validScheme: "bitcoin", removeScheme: true)
         let addressSelector = BitcoinAddressSelector()
+        let addressKeyHashConverter = SegWitBech32KeyHashConverter()
         
         let bitcoinCore = try BitcoinCoreBuilder(minLogLevel: minLogLevel)
             .set(network: network)
@@ -171,9 +176,10 @@ public class BitcoinKit: AbstractKit {
             .set(seed: seed)
             .set(paymentAddressParser: paymentAddressParser)
             .set(addressSelector: addressSelector)
+            .set(addressKeyHashConverter: addressKeyHashConverter)
             .set(walletId: walletId)
             .set(peerSize: 10)
-            .set(newWallet: false)
+            .set(syncMode: .api)
             .set(storage: storage)
             .build()
         
@@ -206,7 +212,7 @@ public class BitcoinKit: AbstractKit {
 
         lines.append("--------------- Bitcoin Segwit (zero program) addresses --------------------")
         for pubKey in pubKeys {
-            lines.append("acc: \(pubKey.account) - inx: \(pubKey.index) - ext: \(pubKey.external) : \(try! bech32AddressConverter.convert(keyHash: Data(bytes: [0x00, 0x14]) + pubKey.keyHash, type: .p2wpkh).stringValue)") 
+            lines.append("acc: \(pubKey.account) - inx: \(pubKey.index) - ext: \(pubKey.external) : \(try! bech32AddressConverter.convert(keyHash: Data([0x00, 0x14]) + pubKey.keyHash, type: .p2wpkh).stringValue)") 
         }
 
         return lines.joined(separator: "\n")
