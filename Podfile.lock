@@ -1,6 +1,7 @@
 PODS:
   - Alamofire (4.8.2)
-  - BigInt (4.0.0)
+  - BigInt (3.1.0):
+    - SipHash (~> 1.2)
   - CryptoBLS.swift (1.1)
   - CryptoX11.swift (1.1)
   - Cuckoo (1.0.6)
@@ -16,10 +17,11 @@ PODS:
   - RxBlocking (5.0.0):
     - RxSwift (~> 5)
   - RxSwift (5.0.0)
+  - SipHash (1.2.2)
 
 DEPENDENCIES:
   - Alamofire (~> 4.0)
-  - BigInt (~> 4.0)
+  - BigInt (~> 3.1)
   - CryptoBLS.swift (~> 1.1)
   - CryptoX11.swift (~> 1.1)
   - Cuckoo
@@ -45,6 +47,7 @@ SPEC REPOS:
     - Quick
     - RxBlocking
     - RxSwift
+    - SipHash
 
 EXTERNAL SOURCES:
   HSCryptoKit:
@@ -63,7 +66,7 @@ CHECKOUT OPTIONS:
 
 SPEC CHECKSUMS:
   Alamofire: ae5c501addb7afdbb13687d7f2f722c78734c2d3
-  BigInt: 2aad1a9942dc932ec8b84290d2c564a3d76f97ab
+  BigInt: 76b5dfdfa3e2e478d4ffdf161aeede5502e2742f
   CryptoBLS.swift: 89828d8e3013e45ce4f913d26008b91fc5d0f3a0
   CryptoX11.swift: 8f0ca5fbfefbe49126220ce23b5de106928cf0f0
   Cuckoo: 8074fc309159c4862665b83798f5ad03e061e8bd
@@ -75,7 +78,8 @@ SPEC CHECKSUMS:
   Quick: 4be43f6634acfa727dd106bdf3929ce125ffa79d
   RxBlocking: c67185d26498ea3cbe3e121917c3c16739e43123
   RxSwift: 8b0671caa829a763bbce7271095859121cbd895f
+  SipHash: fad90a4683e420c52ef28063063dbbce248ea6d4
 
-PODFILE CHECKSUM: 2331b808dad47c5119f23033124d7686f7657ebb
+PODFILE CHECKSUM: c7de049e9723d726963ff445fe4a612d283b825e
 
 COCOAPODS: 1.7.1

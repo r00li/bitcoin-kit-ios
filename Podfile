@@ -22,7 +22,7 @@ def kit_pods
   pod 'Alamofire', '~> 4.0'
   pod 'ObjectMapper', '~> 3.0'
   pod 'RxSwift', '~> 5.0'
-  pod 'BigInt', '~> 4.0'
+  pod 'BigInt', '~> 3.1'
   pod 'GRDB.swift', '~> 4.0'
 end
 
