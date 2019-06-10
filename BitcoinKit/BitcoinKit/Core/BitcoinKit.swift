@@ -217,5 +217,12 @@ public class BitcoinKit: AbstractKit {
 
         return lines.joined(separator: "\n")
     }
+    
+    public static func getStoragePathForWallet(_ walletId: String, testnet: Bool) -> String? {
+        let networkType: NetworkType = testnet ? .testNet : .mainNet
+        let databaseFilePath = try? DirectoryHelper.directoryURL(for: "BitcoinKit").appendingPathComponent("\(walletId)-\(networkType)").path
+        
+        return databaseFilePath
+    }
 
 }
